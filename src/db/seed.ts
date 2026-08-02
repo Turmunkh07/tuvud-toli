@@ -36,7 +36,7 @@ const seedData: SeedWord[] = [
     termTibetan: "ཆོས་",
     definitions: [
       {
-        source: "Сумати Ратна. Төвд-монгол толь. 1959",
+        source: "Сумати Ратна. Төвөд-монгол толь. 1959",
         definitionText: "Ном, шашны сургаал; юмс үзэгдлийн мөн чанар.",
       },
       {
@@ -49,7 +49,7 @@ const seedData: SeedWord[] = [
     termTibetan: "སེམས་",
     definitions: [
       {
-        source: "Сумати Ратна. Төвд-монгол толь. 1959",
+        source: "Сумати Ратна. Төвөд-монгол толь. 1959",
         definitionText: "Сэтгэл, оюун ухаан; мэдрэх чадвар.",
       },
     ],
@@ -85,7 +85,7 @@ const seedData: SeedWord[] = [
     termTibetan: "དགེ་སློང་",
     definitions: [
       {
-        source: "Сумати Ратна. Төвд-монгол толь. 1959",
+        source: "Сумати Ратна. Төвөд-монгол толь. 1959",
         definitionText: "Гэлэн; бүрэн санваар хүртсэн лам.",
       },
     ],

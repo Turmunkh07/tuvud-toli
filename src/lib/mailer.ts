@@ -34,7 +34,7 @@ export async function sendInviteEmail(invite: InviteEmail): Promise<void> {
   const text = [
     `Сайн байна уу, ${invite.name}.`,
     "",
-    `${invite.invitedBy} таныг Төвд-Монгол толь бичгийн хамтран ажиллагч болгон урьлаа.`,
+    `${invite.invitedBy} таныг Төвөд-Монгол толь бичгийн хамтран ажиллагч болгон урьлаа.`,
     "",
     "Нэвтрэх мэдээлэл:",
     `  Хаяг:     ${invite.loginUrl}`,
@@ -47,7 +47,7 @@ export async function sendInviteEmail(invite: InviteEmail): Promise<void> {
   const html = `
     <div style="font-family:Georgia,serif;line-height:1.6;color:#1b1b1b">
       <p>Сайн байна уу, ${escapeHtml(invite.name)}.</p>
-      <p>${escapeHtml(invite.invitedBy)} таныг <strong>Төвд-Монгол толь</strong> бичгийн хамтран ажиллагч болгон урьлаа.</p>
+      <p>${escapeHtml(invite.invitedBy)} таныг <strong>Төвөд-Монгол толь</strong> бичгийн хамтран ажиллагч болгон урьлаа.</p>
       <table style="border-collapse:collapse;margin:16px 0">
         <tr><td style="padding:4px 12px 4px 0;color:#5b6360">Хаяг</td><td><a href="${escapeHtml(invite.loginUrl)}" style="color:#2e7d32">${escapeHtml(invite.loginUrl)}</a></td></tr>
         <tr><td style="padding:4px 12px 4px 0;color:#5b6360">Имэйл</td><td>${escapeHtml(invite.to)}</td></tr>
@@ -60,7 +60,7 @@ export async function sendInviteEmail(invite: InviteEmail): Promise<void> {
   await transport.sendMail({
     from: smtpConfigFromEnv()!.from,
     to: invite.to,
-    subject: "Төвд-Монгол толь — хамтран ажиллах урилга",
+    subject: "Төвөд-Монгол толь — хамтран ажиллах урилга",
     text,
     html,
   });

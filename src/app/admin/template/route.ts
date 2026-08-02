@@ -16,7 +16,7 @@ export async function GET() {
 
   sheet.columns = [
     { header: "Эх сурвалж", key: "source", width: 42 },
-    { header: "Төвд үг", key: "term", width: 26 },
+    { header: "Төвөд үг", key: "term", width: 26 },
     { header: "Тодорхойлолт (кирилл)", key: "definition", width: 64 },
   ];
 

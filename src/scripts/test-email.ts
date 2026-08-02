@@ -49,7 +49,7 @@ async function main() {
   const info = await transport.sendMail({
     from: smtp!.from,
     to: recipient,
-    subject: "Төвд-Монгол толь — SMTP test",
+    subject: "Төвөд-Монгол толь — SMTP test",
     text: "If you are reading this, invitation emails will work.",
   });
 

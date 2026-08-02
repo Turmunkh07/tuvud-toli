@@ -20,10 +20,10 @@ export default async function Home({
     <main className="flex flex-1 flex-col items-center px-6 py-16">
       <div className="w-full max-w-2xl text-center">
         <h1 className="font-serif text-4xl font-semibold tracking-tight text-foreground">
-          Төвд-Монгол толь
+          Төвөд-Монгол толь
         </h1>
         <p className="mt-3 text-muted-foreground">
-          Эрдэмтэн судлаачдад зориулсан төвд-монгол толь бичиг
+          Эрдэмтэн судлаачдад зориулсан Төвөд-монгол толь бичиг
         </p>
       </div>
 
@@ -32,7 +32,7 @@ export default async function Home({
           type="search"
           name="q"
           defaultValue={query}
-          placeholder="Төвд үг хайх..."
+          placeholder="Төвөд үг хайх..."
           autoFocus
           className="tibetan w-full rounded-md border border-border bg-surface px-5 py-3 text-lg text-foreground placeholder:font-serif placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary-light"
         />

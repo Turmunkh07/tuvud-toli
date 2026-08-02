@@ -1,4 +1,4 @@
-# Төвд-Монгол толь
+# Төвөд-Монгол толь
 
 A lightweight, minimalist academic **Tibetan → Mongolian** dictionary. Each entry is a Tibetan term with one or more Cyrillic definitions, every definition carrying its academic source. Includes a small admin CMS with bulk .xlsx import. Built to run entirely on free tiers ($0/month).
 

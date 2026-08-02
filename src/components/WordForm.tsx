@@ -56,7 +56,7 @@ export function WordForm({
   return (
     <form action={action} onSubmit={trimThenValidate} className="flex flex-col gap-8">
       <label className="flex flex-col gap-1 text-sm text-foreground">
-        Төвд үг
+        Төвөд үг
         <input
           type="text"
           name="termTibetan"
