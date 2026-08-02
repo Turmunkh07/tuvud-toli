@@ -40,6 +40,28 @@ body {
   font-family: var(--font-serif), Georgia, "Times New Roman", serif;
 }
 
+/*
+  Tailwind v4's Preflight dropped the `button { cursor: pointer }` rule that v3
+  shipped, deferring to the native default (an arrow). Links are unaffected, so
+  without this only buttons feel unclickable. Restored here for every button
+  rather than per-component, so new buttons get it for free.
+*/
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+
+  /* The "Choose File" control is a separate pseudo-element and needs its own rule. */
+  ::file-selector-button {
+    cursor: pointer;
+  }
+}
+
 /* Tibetan stacks glyphs vertically within the line, so it needs extra leading to breathe. */
 .tibetan {
   font-family: var(--font-tibetan), serif;

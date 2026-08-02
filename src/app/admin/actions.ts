@@ -11,6 +11,7 @@ import { isMailConfigured, sendInviteEmail } from "@/lib/mailer";
 import { verifyAdminCredentials } from "@/lib/admin-users";
 import { createSession, destroySession } from "@/lib/session";
 import { verifySession } from "@/lib/dal";
+import { canManageCollaborators } from "@/lib/owners";
 import { parseWorkbook } from "@/lib/xlsx-import";
 import { normalizeForSearch } from "@/lib/normalize";
 import {
@@ -97,7 +98,7 @@ export async function loginAction(formData: FormData) {
   }
 
   await clearAttempts(identifier);
-  await createSession(admin.name);
+  await createSession(admin.name, admin.email);
   redirect("/admin");
 }
 
@@ -217,6 +218,11 @@ export async function inviteCollaboratorAction(formData: FormData) {
 
 export async function removeCollaboratorAction(adminId: number) {
   const session = await verifySession();
+
+  // Enforced here, not just by hiding the button — the action is reachable directly.
+  if (!canManageCollaborators(session)) {
+    redirect(`/admin?error=${encodeURIComponent("Танд хамтран ажиллагчийг хасах эрх байхгүй.")}`);
+  }
 
   const [target] = await db.select().from(admins).where(eq(admins.id, adminId));
   if (!target) redirect("/admin");

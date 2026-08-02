@@ -4,6 +4,7 @@ import { searchWords, parseTab, parsePage } from "@/lib/search";
 import { SearchResults } from "@/components/SearchResults";
 import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
 import { listCollaborators } from "@/lib/collaborators";
+import { canManageCollaborators } from "@/lib/owners";
 import {
   logoutAction,
   importWorkbookAction,
@@ -23,6 +24,7 @@ export default async function AdminDashboardPage({
   }>;
 }) {
   const session = await verifySession();
+  const canManage = canManageCollaborators(session);
   const { q, tab, page, notice, error } = await searchParams;
   const query = (q ?? "").trim();
   const [results, collaborators] = await Promise.all([
@@ -156,14 +158,16 @@ export default async function AdminDashboardPage({
                 </span>
                 <span className="flex items-center gap-3 text-xs text-muted-foreground">
                   {collaborator.lastLoginAt ? "Нэвтэрсэн" : "Хараахан нэвтрээгүй"}
-                  <form action={removeCollaboratorAction.bind(null, collaborator.id)}>
-                    <ConfirmSubmitButton
-                      confirmMessage={`${collaborator.email}-г хасах уу?`}
-                      className="text-red-700 hover:underline"
-                    >
-                      Хасах
-                    </ConfirmSubmitButton>
-                  </form>
+                  {canManage && (
+                    <form action={removeCollaboratorAction.bind(null, collaborator.id)}>
+                      <ConfirmSubmitButton
+                        confirmMessage={`${collaborator.email}-г хасах уу?`}
+                        className="text-red-700 hover:underline"
+                      >
+                        Хасах
+                      </ConfirmSubmitButton>
+                    </form>
+                  )}
                 </span>
               </li>
             ))}

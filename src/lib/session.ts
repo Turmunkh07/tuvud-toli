@@ -11,6 +11,8 @@ const encodedSecret = new TextEncoder().encode(env.AUTH_SECRET);
 
 export type SessionPayload = {
   name: string;
+  /** Null for ADMIN_USERS accounts, which log in by name and have no email. */
+  email: string | null;
 };
 
 export async function encrypt(payload: SessionPayload): Promise<string> {
@@ -26,14 +28,16 @@ export async function decrypt(token: string | undefined): Promise<SessionPayload
   try {
     const { payload } = await jwtVerify(token, encodedSecret, { algorithms: ["HS256"] });
     if (typeof payload.name !== "string") return null;
-    return { name: payload.name };
+    // Sessions issued before email was carried simply lack the claim.
+    const email = typeof payload.email === "string" ? payload.email : null;
+    return { name: payload.name, email };
   } catch {
     return null;
   }
 }
 
-export async function createSession(name: string) {
-  const token = await encrypt({ name });
+export async function createSession(name: string, email: string | null) {
+  const token = await encrypt({ name, email });
   const cookieStore = await cookies();
   cookieStore.set(COOKIE_NAME, token, {
     httpOnly: true,

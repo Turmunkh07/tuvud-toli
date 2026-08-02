@@ -18,6 +18,8 @@ An admin can invite someone from the dashboard by name and email. The system gen
 
 Set `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` (SMTP2GO's free tier is enough — a handful of invites a year sits far inside 1,000/month) plus `APP_URL` for the link in the email. **Without SMTP configured the invite still creates the account and shows you the generated password to pass on by hand**, rather than reporting success for mail that never left. That fallback puts the password in a URL and therefore in browser history, so configure SMTP before using this in earnest.
 
+**Removing** a collaborator is restricted to the accounts listed in `OWNER_IDENTIFIERS` (comma-separated, matched case-insensitively against either an `ADMIN_USERS` name or a collaborator's login email). Everyone else can still invite and edit entries. The check runs inside the server action, not just by hiding the button, since the action is reachable directly. If `OWNER_IDENTIFIERS` is blank, only `ADMIN_USERS` accounts qualify — defaulting to "everyone" would silently void the restriction if the variable went missing.
+
 The password is emailed in plaintext by request. It's recoverable only at invite time; to replace a lost one, remove the collaborator and invite them again.
 
 ## Admin login throttling
