@@ -21,7 +21,7 @@ const notoTibetan = Noto_Serif_Tibetan({
 export const metadata: Metadata = {
   title: "Төвөд-Монгол толь",
   description:
-    "Эрдэмтэн судлаачдад зориулсан Төвөд-монгол толь бичиг. A Tibetan-Mongolian academic dictionary with sourced definitions.",
+    " Төвөд-монгол толь бичиг. A Tibetan-Mongolian academic dictionary with sourced definitions.",
 };
 
 export default function RootLayout({

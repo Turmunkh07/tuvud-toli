@@ -23,7 +23,7 @@ export default async function Home({
           Төвөд-Монгол толь
         </h1>
         <p className="mt-3 text-muted-foreground">
-          Эрдэмтэн судлаачдад зориулсан Төвөд-монгол толь бичиг
+           Төвөд-монгол толь бичиг
         </p>
       </div>
 
