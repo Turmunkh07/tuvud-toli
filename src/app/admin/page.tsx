@@ -5,6 +5,7 @@ import { SearchResults } from "@/components/SearchResults";
 import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
 import { listCollaborators } from "@/lib/collaborators";
 import { canManageCollaborators } from "@/lib/owners";
+import { CleanFlashUrl } from "@/components/CleanFlashUrl";
 import {
   logoutAction,
   importWorkbookAction,
@@ -34,6 +35,7 @@ export default async function AdminDashboardPage({
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-10 px-6 py-12">
+      <CleanFlashUrl />
       <header className="flex items-center justify-between border-b border-border pb-4">
         <div>
           <h1 className="font-serif text-2xl font-semibold text-foreground">Удирдлагын самбар</h1>

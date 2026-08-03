@@ -1,4 +1,5 @@
 import { loginAction } from "@/app/admin/actions";
+import { CleanFlashUrl } from "@/components/CleanFlashUrl";
 
 export default async function AdminLoginPage({
   searchParams,
@@ -9,6 +10,7 @@ export default async function AdminLoginPage({
 
   return (
     <main className="flex flex-1 flex-col items-center justify-center px-6 py-24">
+      <CleanFlashUrl />
       <div className="w-full max-w-sm">
         <h1 className="font-serif text-2xl font-semibold text-foreground">Админ нэвтрэх</h1>
         <p className="mt-1 text-sm text-muted-foreground">Толь бичгийн удирдлагын самбар</p>

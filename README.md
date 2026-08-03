@@ -23,6 +23,8 @@ Set `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` (SMT
 
 The password is emailed in plaintext by request. It's recoverable only at invite time; to replace a lost one, remove the collaborator and invite them again.
 
+**Removal is instant, not just for future logins.** A session cookie is a signed JWT — cryptographically valid for up to 7 days regardless of what happens to the account afterward, so checking only the token would let a just-removed collaborator keep working until it expired. `proxy.ts` re-checks every `/admin/*` request against the database (`lib/session-validity.ts`) and clears the cookie the moment the account is gone; `lib/dal.ts` repeats the same check as an independent backstop close to the data itself. This is one of the few database reads Proxy does — Next's own docs advise against that for latency at scale, but it's also the only layer allowed to clear a cookie on its response, which is what stops a removed collaborator's browser from looping between `/admin` and `/admin/login`. At this app's scale the extra read is immaterial.
+
 ## Admin login throttling
 
 Failed logins are recorded in `login_attempts` and an IP is locked out after **8 failures in 15 minutes**. The check runs before credentials are read, so a locked-out client cannot use the endpoint as a password oracle — the correct password is refused too. A successful login clears that IP's counter, and expired rows are deleted opportunistically on each check, so no cron job is needed.

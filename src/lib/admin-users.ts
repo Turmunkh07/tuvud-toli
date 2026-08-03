@@ -23,6 +23,11 @@ function loadEnvAdmins(): EnvAdmin[] {
   return parsed as EnvAdmin[];
 }
 
+/** Names only, for checking whether a name-based session is still backed by a real entry. */
+export function listEnvAdminNames(): string[] {
+  return loadEnvAdmins().map((admin) => admin.name);
+}
+
 function timingSafeEqualString(a: string, b: string): boolean {
   const bufA = createHash("sha256").update(a).digest();
   const bufB = createHash("sha256").update(b).digest();

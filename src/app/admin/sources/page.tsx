@@ -2,6 +2,7 @@ import Link from "next/link";
 import { verifySession } from "@/lib/dal";
 import { listSources } from "@/lib/sources";
 import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
+import { CleanFlashUrl } from "@/components/CleanFlashUrl";
 import {
   renameSourceAction,
   mergeSourcesIntoAction,
@@ -21,6 +22,7 @@ export default async function AdminSourcesPage({
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-6 py-12">
+      <CleanFlashUrl />
       <Link href="/admin" className="text-sm text-muted-foreground hover:text-primary">
         ← Самбар руу буцах
       </Link>
