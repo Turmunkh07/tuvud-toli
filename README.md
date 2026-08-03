@@ -4,11 +4,12 @@ A lightweight, minimalist academic **Tibetan → Mongolian** dictionary. Each en
 
 ## Data model
 
-| Table          | Shape                                                            |
-| -------------- | ---------------------------------------------------------------- |
-| `words`        | `term_tibetan` (the headword)                                     |
-| `definitions`  | belongs to a word: `source`, `definition_text`, `meaning_number`  |
-| `activity_log` | who changed what, when                                            |
+| Table          | Shape                                                                     |
+| -------------- | -------------------------------------------------------------------------- |
+| `words`        | `term_tibetan` (the headword), `term_key` (normalised, for merging)         |
+| `sources`      | `title` (a book/dictionary/paper), `title_key` (normalised, for merging)    |
+| `definitions`  | belongs to a word and a source: `definition_text`, `meaning_number`         |
+| `activity_log` | who changed what, when                                                     |
 
 `definitions.definition_text_lower` is a lowercased mirror of the definition, written automatically on every insert. SQLite's `LIKE` only case-folds ASCII, so searching Cyrillic would otherwise be case-sensitive — searches run against this column instead.
 
@@ -42,7 +43,17 @@ The importer accepts an `.xlsx` whose first sheet has exactly three columns:
 | B      | Tibetan word                |
 | C      | Definition (Cyrillic)       |
 
-A first row without Tibetan characters in column B is treated as a header and skipped. Rows missing a Tibetan word or a definition are skipped and reported. Rows sharing the same Tibetan word become multiple definitions on a single entry, and if that word already exists in the database the new definitions are appended to it rather than creating a duplicate.
+### Merging one word across many books
+
+Each collaborator imports their own book. Definitions accumulate on the word rather than replacing it, so a headword ends up carrying every source that defines it, and the word page groups them under each source heading.
+
+Merging words is decided by `words.term_key`, a normalised form of the headword (see `lib/tibetan.ts`): NFC-composed, whitespace removed, trailing tsheg `་` and shad `།` stripped. Without it, one scholar typing `ཆོས་` and another typing `ཆོས` would produce two separate entries for the same word — which, across ten books typed by ten people, would happen constantly. The original spelling is preserved for display; only the key is normalised. Adding a word by hand that already exists appends to it under the same rule.
+
+**Sources are a table, not free text** (`sources`, joined via `definitions.source_id`). The source column on each import row is resolved against it — same name (case/whitespace-insensitive) reuses the existing source; an unfamiliar name creates one. This is what actually removes the old failure mode, where a book cited inconsistently across rows split into apparent duplicate sources: now the same wording, however it drifts between rows or between collaborators' files, lands in one place. Manual entry in the CMS offers existing source titles as autocomplete suggestions (an HTML `<datalist>`) for the same reason, though typing something new is always allowed.
+
+`/admin/sources` lists every source with its definition count. **Rename** fixes a source that still ended up inconsistent (typo, abbreviation) — renaming onto a title that already exists merges the two rather than erroring. **Merge** lets you fold one source into another explicitly. Both reassign every affected definition; a source can only be deleted once nothing references it.
+
+A first row without Tibetan characters in column B is treated as a header and skipped. Rows missing any of the three columns are skipped and reported. Rows sharing the same Tibetan word become multiple definitions on a single entry, and if that word already exists in the database the new definitions are appended to it rather than creating a duplicate.
 
 Uploads are capped at 4MB (`serverActions.bodySizeLimit` in `next.config.ts`, kept under Vercel's 4.5MB request limit).
 

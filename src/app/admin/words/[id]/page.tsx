@@ -5,21 +5,22 @@ import { getWordById } from "@/lib/words";
 import { WordForm } from "@/components/WordForm";
 import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
 import { updateWordAction, deleteWordAction } from "@/app/admin/actions";
+import { listSources } from "@/lib/sources";
 
 export default async function AdminWordEditPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ saved?: string }>;
+  searchParams: Promise<{ saved?: string; notice?: string }>;
 }) {
   await verifySession();
 
-  const [{ id }, { saved }] = await Promise.all([params, searchParams]);
+  const [{ id }, { saved, notice }] = await Promise.all([params, searchParams]);
   const wordId = Number(id);
   if (!Number.isInteger(wordId)) notFound();
 
-  const word = await getWordById(wordId);
+  const [word, sources] = await Promise.all([getWordById(wordId), listSources()]);
   if (!word) notFound();
 
   const boundUpdate = updateWordAction.bind(null, wordId);
@@ -41,9 +42,9 @@ export default async function AdminWordEditPage({
         </Link>
       </div>
 
-      {saved && (
+      {(notice || saved) && (
         <p className="rounded-md border border-primary-light bg-primary-light/10 px-3 py-2 text-sm text-primary-dark">
-          Хадгалагдлаа.
+          {notice ?? "Хадгалагдлаа."}
         </p>
       )}
 
@@ -54,6 +55,7 @@ export default async function AdminWordEditPage({
           source: definition.source,
           definitionText: definition.definitionText,
         }))}
+        existingSources={sources.map((source) => source.title)}
         submitLabel="Хадгалах"
       />
 

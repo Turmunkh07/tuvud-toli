@@ -86,13 +86,14 @@ export default async function AdminDashboardPage({
           <h2 className="text-sm font-medium uppercase tracking-wide text-brown">
             Excel-ээс олноор нь оруулах
           </h2>
-          <a
-            href="/admin/template"
-            className="text-sm text-primary hover:underline"
-            download
-          >
-            ↓ Загвар файл татах
-          </a>
+          <div className="flex gap-3">
+            <Link href="/admin/sources" className="text-sm text-primary hover:underline">
+              Эх сурвалжууд
+            </Link>
+            <a href="/admin/template" className="text-sm text-primary hover:underline" download>
+              ↓ Загвар файл татах
+            </a>
+          </div>
         </div>
         <form action={importWorkbookAction} className="mt-3 flex flex-col gap-3 sm:flex-row">
           <input

@@ -10,15 +10,21 @@ const inputClass =
 let rowKeySeed = 0;
 const nextRowKey = () => `row-${rowKeySeed++}`;
 
+const SOURCES_DATALIST_ID = "existing-sources";
+
 export function WordForm({
   action,
   initialTerm = "",
   initialDefinitions = [],
+  existingSources = [],
   submitLabel,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   initialTerm?: string;
   initialDefinitions?: DefinitionRow[];
+  /** Titles already in the sources table, offered as suggestions so a
+   * collaborator reuses an existing book instead of retyping its name. */
+  existingSources?: string[];
   submitLabel: string;
 }) {
   const [rows, setRows] = useState(() =>
@@ -55,6 +61,12 @@ export function WordForm({
 
   return (
     <form action={action} onSubmit={trimThenValidate} className="flex flex-col gap-8">
+      <datalist id={SOURCES_DATALIST_ID}>
+        {existingSources.map((title) => (
+          <option key={title} value={title} />
+        ))}
+      </datalist>
+
       <label className="flex flex-col gap-1 text-sm text-foreground">
         Төвөд үг
         <input
@@ -91,6 +103,7 @@ export function WordForm({
                 <input
                   type="text"
                   name="source"
+                  list={SOURCES_DATALIST_ID}
                   defaultValue={row.source}
                   required
                   className={inputClass}

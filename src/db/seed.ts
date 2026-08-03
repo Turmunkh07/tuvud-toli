@@ -11,8 +11,16 @@ config({ path: ".env.local" });
 
 import { drizzle } from "drizzle-orm/libsql";
 import { createClient } from "@libsql/client";
-import { words, definitions } from "./schema";
+import { eq } from "drizzle-orm";
+import { words, definitions, sources } from "./schema";
 import { normalizeForSearch } from "../lib/normalize";
+import { normalizeTibetanTerm } from "../lib/tibetan";
+
+// Inlined rather than imported from lib/sources.ts, which is guarded with
+// 'server-only' and throws when loaded outside the Next.js bundler.
+function normalizeSourceKey(title: string): string {
+  return title.normalize("NFC").trim().replace(/\s+/gu, " ").toLowerCase();
+}
 
 const url = process.env.TURSO_DATABASE_URL;
 const authToken = process.env.TURSO_AUTH_TOKEN;
@@ -110,26 +118,46 @@ const seedData: SeedWord[] = [
   },
 ];
 
+async function resolveSourceId(titleRaw: string): Promise<number> {
+  const title = titleRaw.normalize("NFC").trim().replace(/\s+/gu, " ");
+  const titleKey = normalizeSourceKey(title);
+
+  const [existing] = await db.select().from(sources).where(eq(sources.titleKey, titleKey));
+  if (existing) return existing.id;
+
+  const [inserted] = await db
+    .insert(sources)
+    .values({ title, titleKey })
+    .returning({ id: sources.id });
+  return inserted.id;
+}
+
 async function seed() {
   console.log("Clearing existing data...");
   await db.delete(definitions);
   await db.delete(words);
+  await db.delete(sources);
 
   for (const word of seedData) {
     const [inserted] = await db
       .insert(words)
-      .values({ termTibetan: word.termTibetan })
+      .values({
+        termTibetan: word.termTibetan,
+        termKey: normalizeTibetanTerm(word.termTibetan),
+      })
       .returning({ id: words.id });
 
-    await db.insert(definitions).values(
-      word.definitions.map((definition, index) => ({
+    for (const [index, definition] of word.definitions.entries()) {
+      const sourceId = await resolveSourceId(definition.source);
+      await db.insert(definitions).values({
         wordId: inserted.id,
         meaningNumber: index + 1,
         source: definition.source,
+        sourceId,
         definitionText: definition.definitionText,
         definitionTextLower: normalizeForSearch(definition.definitionText),
-      })),
-    );
+      });
+    }
 
     console.log(`Seeded: ${word.termTibetan}`);
   }

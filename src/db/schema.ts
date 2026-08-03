@@ -6,7 +6,14 @@ export const words = sqliteTable(
   "words",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
+    /** The headword as the contributing source spelled it — this is what's displayed. */
     termTibetan: text("term_tibetan").notNull(),
+    /**
+     * Normalised form used to decide whether two contributors mean the same
+     * word. See lib/tibetan.ts. Nullable only so the column could be added
+     * without drizzle-kit rebuilding (and emptying) the table.
+     */
+    termKey: text("term_key"),
     createdAt: text("created_at")
       .notNull()
       .default(sql`(current_timestamp)`),
@@ -14,7 +21,32 @@ export const words = sqliteTable(
       .notNull()
       .default(sql`(current_timestamp)`),
   },
-  (table) => [index("words_term_tibetan_idx").on(table.termTibetan)],
+  (table) => [
+    index("words_term_tibetan_idx").on(table.termTibetan),
+    index("words_term_key_idx").on(table.termKey),
+  ],
+);
+
+/**
+ * One row per contributing book/dictionary/paper, so "which source is this"
+ * is a foreign key rather than a string a collaborator retypes on every row of
+ * their spreadsheet. Two rows with the same intended source, spelled slightly
+ * differently, used to read as two different sources — this makes that
+ * impossible by construction: pick the existing source or create one, once.
+ */
+export const sources = sqliteTable(
+  "sources",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    /** Display form — whatever casing/punctuation it was first entered with. */
+    title: text("title").notNull(),
+    /** Normalised dedup key; see lib/sources.ts. */
+    titleKey: text("title_key").notNull().unique(),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(current_timestamp)`),
+  },
+  (table) => [index("sources_title_key_idx").on(table.titleKey)],
 );
 
 export const definitions = sqliteTable(
@@ -25,8 +57,17 @@ export const definitions = sqliteTable(
       .notNull()
       .references(() => words.id, { onDelete: "cascade" }),
     meaningNumber: integer("meaning_number").notNull().default(1),
-    /** Academic source this definition is drawn from (book, paper, dictionary). Required. */
+    /**
+     * Legacy free-text source, kept NOT NULL and always written as a mirror of
+     * sources.title so this column never goes stale. `sourceId` is the join
+     * key every read now uses; this text column exists only because SQLite
+     * migrations to add a NOT NULL column force drizzle-kit to rebuild the
+     * table and empty it (see README) — kept nullable-in-spirit-only to avoid
+     * ever risking that again.
+     */
     source: text("source").notNull(),
+    /** Nullable for the same reason: an additive column can never trigger a rebuild. */
+    sourceId: integer("source_id").references(() => sources.id),
     definitionText: text("definition_text").notNull(),
     /** Lowercased mirror of definitionText; see lib/normalize.ts. Always write both. */
     definitionTextLower: text("definition_text_lower"),
@@ -34,6 +75,7 @@ export const definitions = sqliteTable(
   (table) => [
     index("definitions_word_id_idx").on(table.wordId),
     index("definitions_text_lower_idx").on(table.definitionTextLower),
+    index("definitions_source_id_idx").on(table.sourceId),
   ],
 );
 
@@ -41,10 +83,18 @@ export const wordsRelations = relations(words, ({ many }) => ({
   definitions: many(definitions),
 }));
 
+export const sourcesRelations = relations(sources, ({ many }) => ({
+  definitions: many(definitions),
+}));
+
 export const definitionsRelations = relations(definitions, ({ one }) => ({
   word: one(words, {
     fields: [definitions.wordId],
     references: [words.id],
+  }),
+  sourceRef: one(sources, {
+    fields: [definitions.sourceId],
+    references: [sources.id],
   }),
 }));
 

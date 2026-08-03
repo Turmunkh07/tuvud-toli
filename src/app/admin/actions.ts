@@ -14,6 +14,14 @@ import { verifySession } from "@/lib/dal";
 import { canManageCollaborators } from "@/lib/owners";
 import { parseWorkbook } from "@/lib/xlsx-import";
 import { normalizeForSearch } from "@/lib/normalize";
+import { normalizeTibetanTerm } from "@/lib/tibetan";
+import {
+  resolveSources,
+  normalizeSourceKey,
+  renameSource,
+  mergeSources,
+  deleteSourceIfUnused,
+} from "@/lib/sources";
 import {
   getClientIdentifier,
   checkRateLimit,
@@ -22,7 +30,7 @@ import {
 } from "@/lib/rate-limit";
 
 type ActivityAction = "create" | "update" | "delete" | "import";
-type ActivityEntity = "word" | "definition" | "import";
+type ActivityEntity = "word" | "definition" | "import" | "source";
 
 async function logActivity(
   actor: string,
@@ -45,31 +53,41 @@ function requiredField(formData: FormData, name: string): string {
 /**
  * Definition rows are submitted as repeated `source` / `definitionText` fields,
  * so the pairs line up by position no matter which rows were added or removed.
+ * Each row's source text is resolved against the `sources` table — same name,
+ * same source; a name not seen before creates one — rather than stored as
+ * free text, so it can never split into near-duplicates by spelling variance.
  */
-function readDefinitionRows(formData: FormData) {
-  const sources = formData.getAll("source").map((v) => String(v).trim());
+async function readDefinitionRows(formData: FormData) {
+  const rawSources = formData.getAll("source").map((v) => String(v).trim());
   const texts = formData.getAll("definitionText").map((v) => String(v).trim());
 
   const rows = texts
-    .map((definitionText, index) => ({ source: sources[index] ?? "", definitionText }))
+    .map((definitionText, index) => ({ sourceRaw: rawSources[index] ?? "", definitionText }))
     // A row left entirely untouched is treated as unused rather than an error.
-    .filter((row) => row.source !== "" || row.definitionText !== "");
+    .filter((row) => row.sourceRaw !== "" || row.definitionText !== "");
 
   if (rows.length === 0) {
     throw new Error("Дор хаяж нэг тодорхойлолт оруулна уу.");
   }
-  if (rows.some((row) => row.source === "")) {
+  if (rows.some((row) => row.sourceRaw === "")) {
     throw new Error("Тодорхойлолт бүрт эх сурвалж оруулна уу.");
   }
   if (rows.some((row) => row.definitionText === "")) {
     throw new Error("Эх сурвалж бүрт тодорхойлолт оруулна уу.");
   }
 
-  return rows.map((row, index) => ({
-    ...row,
-    meaningNumber: index + 1,
-    definitionTextLower: normalizeForSearch(row.definitionText),
-  }));
+  const resolved = await resolveSources(rows.map((row) => row.sourceRaw));
+
+  return rows.map((row, index) => {
+    const source = resolved.get(normalizeSourceKey(row.sourceRaw))!;
+    return {
+      source: source.title,
+      sourceId: source.id,
+      definitionText: row.definitionText,
+      meaningNumber: index + 1,
+      definitionTextLower: normalizeForSearch(row.definitionText),
+    };
+  });
 }
 
 // --- Auth ---
@@ -112,9 +130,45 @@ export async function logoutAction() {
 export async function createWordAction(formData: FormData) {
   const session = await verifySession();
   const termTibetan = requiredField(formData, "termTibetan");
-  const rows = readDefinitionRows(formData);
+  const rows = await readDefinitionRows(formData);
+  const termKey = normalizeTibetanTerm(termTibetan);
 
-  const [word] = await db.insert(words).values({ termTibetan }).returning({ id: words.id });
+  // Adding a word another source already contributed appends to it rather than
+  // creating a rival entry — the same rule the bulk import follows.
+  const [duplicate] = await db
+    .select({ id: words.id })
+    .from(words)
+    .where(eq(words.termKey, termKey));
+
+  if (duplicate) {
+    const [{ max }] = await db
+      .select({ max: sql<number | null>`max(${definitions.meaningNumber})` })
+      .from(definitions)
+      .where(eq(definitions.wordId, duplicate.id));
+
+    let counter = Number(max ?? 0);
+    await db.insert(definitions).values(
+      rows.map((row) => ({
+        ...row,
+        wordId: duplicate.id,
+        meaningNumber: ++counter,
+      })),
+    );
+
+    await logActivity(session.name, "update", "word", duplicate.id, termTibetan);
+    revalidatePath("/");
+    revalidatePath(`/word/${duplicate.id}`);
+    redirect(
+      `/admin/words/${duplicate.id}?notice=${encodeURIComponent(
+        "Энэ үг аль хэдийн бүртгэгдсэн тул тодорхойлолтыг нь нэмлээ.",
+      )}`,
+    );
+  }
+
+  const [word] = await db
+    .insert(words)
+    .values({ termTibetan, termKey })
+    .returning({ id: words.id });
 
   if (rows.length > 0) {
     await db.insert(definitions).values(rows.map((row) => ({ ...row, wordId: word.id })));
@@ -128,11 +182,15 @@ export async function createWordAction(formData: FormData) {
 export async function updateWordAction(wordId: number, formData: FormData) {
   const session = await verifySession();
   const termTibetan = requiredField(formData, "termTibetan");
-  const rows = readDefinitionRows(formData);
+  const rows = await readDefinitionRows(formData);
 
   await db
     .update(words)
-    .set({ termTibetan, updatedAt: new Date().toISOString() })
+    .set({
+      termTibetan,
+      termKey: normalizeTibetanTerm(termTibetan),
+      updatedAt: new Date().toISOString(),
+    })
     .where(eq(words.id, wordId));
 
   // Definitions are positional, so the simplest correct save is replace-in-place.
@@ -262,7 +320,7 @@ export async function importWorkbookAction(formData: FormData) {
     redirect(`/admin?error=${encodeURIComponent("Файл хэт том байна (дээд хэмжээ 4MB).")}`);
   }
 
-  let grouped: Map<string, { source: string; definitionText: string }[]>;
+  let grouped: Map<string, { term: string; rows: { sourceRaw: string; definitionText: string }[] }>;
   let skipped: number;
   try {
     ({ grouped, skipped } = await parseWorkbook(await file.arrayBuffer()));
@@ -274,33 +332,35 @@ export async function importWorkbookAction(formData: FormData) {
     redirect(`/admin?error=${encodeURIComponent("Файлаас өгөгдөл олдсонгүй.")}`);
   }
 
-  const terms = Array.from(grouped.keys());
+  // Keyed on the normalised form, so a word already contributed by another
+  // source is found even if this book spells it slightly differently.
+  const keys = Array.from(grouped.keys());
   const existing = new Map<string, number>();
 
   // Look up existing terms in chunks so the SQL variable limit is never hit.
-  for (let i = 0; i < terms.length; i += 200) {
-    const chunk = terms.slice(i, i + 200);
+  for (let i = 0; i < keys.length; i += 200) {
+    const chunk = keys.slice(i, i + 200);
     const found = await db
-      .select({ id: words.id, termTibetan: words.termTibetan })
+      .select({ id: words.id, termKey: words.termKey })
       .from(words)
-      .where(inArray(words.termTibetan, chunk));
-    for (const row of found) existing.set(row.termTibetan, row.id);
+      .where(inArray(words.termKey, chunk));
+    for (const row of found) if (row.termKey) existing.set(row.termKey, row.id);
   }
 
-  const newTerms = terms.filter((term) => !existing.has(term));
-  const newTermSet = new Set(newTerms);
-  for (let i = 0; i < newTerms.length; i += 100) {
-    const chunk = newTerms.slice(i, i + 100);
+  const newKeys = keys.filter((key) => !existing.has(key));
+  const newKeySet = new Set(newKeys);
+  for (let i = 0; i < newKeys.length; i += 100) {
+    const chunk = newKeys.slice(i, i + 100);
     const inserted = await db
       .insert(words)
-      .values(chunk.map((termTibetan) => ({ termTibetan })))
-      .returning({ id: words.id, termTibetan: words.termTibetan });
-    for (const row of inserted) existing.set(row.termTibetan, row.id);
+      .values(chunk.map((key) => ({ termTibetan: grouped.get(key)!.term, termKey: key })))
+      .returning({ id: words.id, termKey: words.termKey });
+    for (const row of inserted) if (row.termKey) existing.set(row.termKey, row.id);
   }
 
   // Existing entries get their new definitions appended after the ones already there.
   const nextNumber = new Map<number, number>();
-  const appendIds = terms.filter((t) => !newTermSet.has(t)).map((t) => existing.get(t)!);
+  const appendIds = keys.filter((k) => !newKeySet.has(k)).map((k) => existing.get(k)!);
   for (let i = 0; i < appendIds.length; i += 200) {
     const chunk = appendIds.slice(i, i + 200);
     const counts = await db
@@ -311,22 +371,33 @@ export async function importWorkbookAction(formData: FormData) {
     for (const row of counts) nextNumber.set(row.wordId, Number(row.max));
   }
 
+  // Resolved once across the whole file: same source name anywhere in the
+  // workbook lands on the same row in `sources`, a name not seen before creates one.
+  const allSourceTexts = Array.from(grouped.values()).flatMap((group) =>
+    group.rows.map((row) => row.sourceRaw),
+  );
+  const resolvedSources = await resolveSources(allSourceTexts);
+
   const pending: {
     wordId: number;
     meaningNumber: number;
     source: string;
+    sourceId: number;
     definitionText: string;
     definitionTextLower: string;
   }[] = [];
-  for (const [term, rows] of grouped) {
-    const wordId = existing.get(term)!;
+  for (const [key, group] of grouped) {
+    const wordId = existing.get(key)!;
     let counter = nextNumber.get(wordId) ?? 0;
-    for (const row of rows) {
+    for (const row of group.rows) {
       counter += 1;
+      const source = resolvedSources.get(normalizeSourceKey(row.sourceRaw))!;
       pending.push({
         wordId,
         meaningNumber: counter,
-        ...row,
+        source: source.title,
+        sourceId: source.id,
+        definitionText: row.definitionText,
         definitionTextLower: normalizeForSearch(row.definitionText),
       });
     }
@@ -337,11 +408,69 @@ export async function importWorkbookAction(formData: FormData) {
   }
 
   const summary =
-    `${newTerms.length} шинэ үг, ${terms.length - newTerms.length} одоо байгаа үгэнд ` +
+    `${newKeys.length} шинэ үг, ${keys.length - newKeys.length} одоо байгаа үгэнд ` +
     `нийт ${pending.length} тодорхойлолт нэмэв` +
     (skipped > 0 ? ` (${skipped} мөр алгассан)` : "");
 
   await logActivity(session.name, "import", "import", pending.length, summary);
   revalidatePath("/");
   redirect(`/admin?notice=${encodeURIComponent(summary)}`);
+}
+
+// --- Sources ---
+
+export async function renameSourceAction(sourceId: number, formData: FormData) {
+  const session = await verifySession();
+  const newTitle = requiredField(formData, "title");
+
+  const resultId = await renameSource(sourceId, newTitle);
+  const merged = resultId !== sourceId;
+
+  await logActivity(
+    session.name,
+    "update",
+    "source",
+    resultId,
+    merged ? `merged into "${newTitle}"` : newTitle,
+  );
+  revalidatePath("/");
+  revalidatePath("/admin/sources");
+  redirect(
+    `/admin/sources?notice=${encodeURIComponent(
+      merged
+        ? `Ижил нэртэй эх сурвалж байсан тул нэгтгэлээ: "${newTitle}".`
+        : `"${newTitle}" болгож нэрлэлээ.`,
+    )}`,
+  );
+}
+
+export async function mergeSourcesIntoAction(fromId: number, formData: FormData) {
+  const session = await verifySession();
+  const intoId = Number(requiredField(formData, "targetSourceId"));
+
+  if (!Number.isInteger(intoId) || intoId === fromId) {
+    redirect(`/admin/sources?error=${encodeURIComponent("Хүчинтэй сурвалж сонгоно уу.")}`);
+  }
+
+  await mergeSources(fromId, intoId);
+
+  await logActivity(session.name, "delete", "source", fromId, `merged into #${intoId}`);
+  revalidatePath("/");
+  revalidatePath("/admin/sources");
+  redirect(`/admin/sources?notice=${encodeURIComponent("Эх сурвалжуудыг нэгтгэлээ.")}`);
+}
+
+export async function deleteSourceAction(sourceId: number) {
+  const session = await verifySession();
+
+  try {
+    await deleteSourceIfUnused(sourceId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Устгаж чадсангүй.";
+    redirect(`/admin/sources?error=${encodeURIComponent(message)}`);
+  }
+
+  await logActivity(session.name, "delete", "source", sourceId);
+  revalidatePath("/admin/sources");
+  redirect(`/admin/sources?notice=${encodeURIComponent("Эх сурвалжийг устгалаа.")}`);
 }
