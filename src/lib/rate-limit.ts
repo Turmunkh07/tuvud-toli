@@ -17,13 +17,15 @@ const WINDOW_MS = 15 * 60 * 1000;
  */
 export async function getClientIdentifier(): Promise<string> {
   const headerList = await headers();
-  // Vercel sets both; x-forwarded-for may be a comma-separated chain, and the
-  // client-controlled part is at the end, so the first entry is the real one.
-  const forwarded = headerList.get("x-forwarded-for");
-  if (forwarded) {
-    const first = forwarded.split(",")[0]?.trim();
-    if (first) return first;
-  }
+  // Trustworthy specifically on Vercel: per Vercel's own docs, it overwrites
+  // x-forwarded-for at the edge and does not forward a client-supplied value,
+  // precisely to prevent spoofing this header. That guarantee is Vercel's,
+  // not this header's in general — if this app is ever self-hosted or put
+  // behind a different reverse proxy without equivalent stripping, an
+  // attacker could set x-forwarded-for directly and this limiter would key
+  // on whatever they choose, making it trivially bypassable.
+  const forwarded = headerList.get("x-forwarded-for")?.trim();
+  if (forwarded) return forwarded;
   return headerList.get("x-real-ip")?.trim() || "unknown";
 }
 

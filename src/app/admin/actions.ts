@@ -319,6 +319,9 @@ export async function importWorkbookAction(formData: FormData) {
   if (file.size > MAX_UPLOAD_BYTES) {
     redirect(`/admin?error=${encodeURIComponent("Файл хэт том байна (дээд хэмжээ 4MB).")}`);
   }
+  // The original filename, not just row counts, so /admin/imports can answer
+  // "who uploaded which book" — the actual question this gets asked.
+  const fileName = file.name.slice(0, 200);
 
   let grouped: Map<string, { term: string; rows: { sourceRaw: string; definitionText: string }[] }>;
   let skipped: number;
@@ -412,7 +415,10 @@ export async function importWorkbookAction(formData: FormData) {
     `нийт ${pending.length} тодорхойлолт нэмэв` +
     (skipped > 0 ? ` (${skipped} мөр алгассан)` : "");
 
-  await logActivity(session.name, "import", "import", pending.length, summary);
+  // Filename goes into the stored record (shown on /admin/imports) but not
+  // the on-page notice — the person who just uploaded already knows what
+  // they uploaded; the filename matters to whoever reviews history later.
+  await logActivity(session.name, "import", "import", pending.length, `"${fileName}" — ${summary}`);
   revalidatePath("/");
   redirect(`/admin?notice=${encodeURIComponent(summary)}`);
 }
@@ -452,7 +458,16 @@ export async function mergeSourcesIntoAction(fromId: number, formData: FormData)
     redirect(`/admin/sources?error=${encodeURIComponent("Хүчинтэй сурвалж сонгоно уу.")}`);
   }
 
-  await mergeSources(fromId, intoId);
+  try {
+    await mergeSources(fromId, intoId);
+  } catch (error) {
+    // The target can vanish between page load and submit (e.g. someone else
+    // just merged/deleted it) — same stale-selection race deleteSourceAction
+    // already guards against, so it gets the same friendly-message treatment
+    // instead of crashing to Next's generic error page.
+    const message = error instanceof Error ? error.message : "Нэгтгэж чадсангүй.";
+    redirect(`/admin/sources?error=${encodeURIComponent(message)}`);
+  }
 
   await logActivity(session.name, "delete", "source", fromId, `merged into #${intoId}`);
   revalidatePath("/");

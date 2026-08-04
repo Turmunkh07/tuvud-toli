@@ -92,6 +92,9 @@ export default async function AdminDashboardPage({
             <Link href="/admin/sources" className="text-sm text-primary hover:underline">
               Эх сурвалжууд
             </Link>
+            <Link href="/admin/imports" className="text-sm text-primary hover:underline">
+              Импортын түүх
+            </Link>
             <a href="/admin/template" className="text-sm text-primary hover:underline" download>
               ↓ Загвар файл татах
             </a>

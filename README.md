@@ -55,6 +55,8 @@ Merging words is decided by `words.term_key`, a normalised form of the headword 
 
 `/admin/sources` lists every source with its definition count. **Rename** fixes a source that still ended up inconsistent (typo, abbreviation) — renaming onto a title that already exists merges the two rather than erroring. **Merge** lets you fold one source into another explicitly. Both reassign every affected definition; a source can only be deleted once nothing references it.
 
+`/admin/imports` lists every xlsx import — who ran it, the original filename, and its result — so it's answerable after the fact which admin contributed which book, without reviving a general activity feed on the dashboard. Deleting a word removes its definitions but currently leaves behind any source row that import created if nothing else references it; harmless clutter, clearable by hand from `/admin/sources`.
+
 A first row without Tibetan characters in column B is treated as a header and skipped. Rows missing any of the three columns are skipped and reported. Rows sharing the same Tibetan word become multiple definitions on a single entry, and if that word already exists in the database the new definitions are appended to it rather than creating a duplicate.
 
 Uploads are capped at 4MB (`serverActions.bodySizeLimit` in `next.config.ts`, kept under Vercel's 4.5MB request limit).
