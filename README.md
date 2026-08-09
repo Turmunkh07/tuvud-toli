@@ -9,7 +9,7 @@ A lightweight, minimalist academic **Tibetan → Mongolian** dictionary. Each en
 | `words`        | `term_tibetan` (the headword), `term_key` (normalised, for merging)         |
 | `sources`      | `title` (a book/dictionary/paper), `title_key` (normalised, for merging)    |
 | `definitions`  | belongs to a word and a source: `definition_text`, `meaning_number`         |
-| `activity_log` | who changed what, when                                                     |
+| `activity_log` | who changed what, when; `file_name` for imports                             |
 
 `definitions.definition_text_lower` is a lowercased mirror of the definition, written automatically on every insert. SQLite's `LIKE` only case-folds ASCII, so searching Cyrillic would otherwise be case-sensitive — searches run against this column instead.
 
@@ -55,7 +55,7 @@ Merging words is decided by `words.term_key`, a normalised form of the headword 
 
 `/admin/sources` lists every source with its definition count. **Rename** fixes a source that still ended up inconsistent (typo, abbreviation) — renaming onto a title that already exists merges the two rather than erroring. **Merge** lets you fold one source into another explicitly. Both reassign every affected definition; a source can only be deleted once nothing references it.
 
-`/admin/imports` lists every xlsx import — who ran it, the original filename, and its result — so it's answerable after the fact which admin contributed which book, without reviving a general activity feed on the dashboard. Deleting a word removes its definitions but currently leaves behind any source row that import created if nothing else references it; harmless clutter, clearable by hand from `/admin/sources`.
+`/admin/imports` lists recent xlsx imports — who ran it, the original filename (its own `activity_log.file_name` column, so it can be filtered and sorted on), and its result — so it's answerable after the fact which admin contributed which book, without reviving a general activity feed on the dashboard. The list is capped at the most recent 100 and says so when capped, because `activity_log` grows with every admin action app-wide, not just imports; an index on `(action, id)` keeps the query off a full table scan. Deleting a word removes its definitions but currently leaves behind any source row that import created if nothing else references it; harmless clutter, clearable by hand from `/admin/sources`.
 
 A first row without Tibetan characters in column B is treated as a header and skipped. Rows missing any of the three columns are skipped and reported. Rows sharing the same Tibetan word become multiple definitions on a single entry, and if that word already exists in the database the new definitions are appended to it rather than creating a duplicate.
 

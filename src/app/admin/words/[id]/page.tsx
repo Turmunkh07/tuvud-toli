@@ -6,7 +6,7 @@ import { WordForm } from "@/components/WordForm";
 import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
 import { updateWordAction, deleteWordAction } from "@/app/admin/actions";
 import { listSources } from "@/lib/sources";
-import { CleanFlashUrl } from "@/components/CleanFlashUrl";
+import { AdminPageShell } from "@/components/AdminPageShell";
 
 export default async function AdminWordEditPage({
   params,
@@ -28,12 +28,7 @@ export default async function AdminWordEditPage({
   const boundDelete = deleteWordAction.bind(null, wordId);
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-6 py-12">
-      <CleanFlashUrl />
-      <Link href="/admin" className="text-sm text-muted-foreground hover:text-primary">
-        ← Самбар руу буцах
-      </Link>
-
+    <AdminPageShell>
       <div className="flex items-baseline justify-between gap-4">
         <h1 className="font-serif text-2xl font-semibold text-foreground">Үг засах</h1>
         <Link
@@ -69,6 +64,6 @@ export default async function AdminWordEditPage({
           Энэ үгийг устгах
         </ConfirmSubmitButton>
       </form>
-    </main>
+    </AdminPageShell>
   );
 }

@@ -2,6 +2,7 @@ import "server-only";
 import { eq, inArray, sql, count } from "drizzle-orm";
 import { db } from "@/db";
 import { sources, definitions } from "@/db/schema";
+import { UserFacingError } from "@/lib/errors";
 
 /**
  * Dedup key for a source title. Deliberately looser than the display title:
@@ -109,7 +110,12 @@ export async function renameSource(id: number, newTitleRaw: string) {
 export async function mergeSources(fromId: number, intoId: number) {
   if (fromId === intoId) return;
   const [target] = await db.select({ title: sources.title }).from(sources).where(eq(sources.id, intoId));
-  if (!target) throw new Error("Merge target source does not exist.");
+  // Reachable whenever another admin deletes or merges away the target
+  // between the caller reading it and this running, so the wording is for
+  // an admin to read, not a developer.
+  if (!target) {
+    throw new UserFacingError("Нэгтгэх гэсэн эх сурвалж олдсонгүй. Хуудсыг сэргээж дахин оролдоно уу.");
+  }
 
   await db
     .update(definitions)
@@ -124,7 +130,7 @@ export async function deleteSourceIfUnused(id: number) {
     .from(definitions)
     .where(eq(definitions.sourceId, id));
   if (Number(row?.n ?? 0) > 0) {
-    throw new Error("Энэ эх сурвалжид тодорхойлолт хавсаргасан тул устгах боломжгүй.");
+    throw new UserFacingError("Энэ эх сурвалжид тодорхойлолт хавсаргасан тул устгах боломжгүй.");
   }
   await db.delete(sources).where(eq(sources.id, id));
 }

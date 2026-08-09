@@ -1,8 +1,7 @@
-import Link from "next/link";
 import { verifySession } from "@/lib/dal";
 import { listSources } from "@/lib/sources";
 import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
-import { CleanFlashUrl } from "@/components/CleanFlashUrl";
+import { AdminPageShell } from "@/components/AdminPageShell";
 import {
   renameSourceAction,
   mergeSourcesIntoAction,
@@ -21,12 +20,7 @@ export default async function AdminSourcesPage({
   const [{ notice, error }, allSources] = await Promise.all([searchParams, listSources()]);
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-6 py-12">
-      <CleanFlashUrl />
-      <Link href="/admin" className="text-sm text-muted-foreground hover:text-primary">
-        ← Самбар руу буцах
-      </Link>
-
+    <AdminPageShell>
       <div>
         <h1 className="font-serif text-2xl font-semibold text-foreground">Эх сурвалжууд</h1>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -123,6 +117,6 @@ export default async function AdminSourcesPage({
           })}
         </ul>
       )}
-    </main>
+    </AdminPageShell>
   );
 }

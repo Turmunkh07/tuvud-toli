@@ -135,14 +135,28 @@ export const loginAttempts = sqliteTable(
 );
 
 /** Audit trail of admin edits, so every change can be attributed to the admin who made it. */
-export const activityLog = sqliteTable("activity_log", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  actor: text("actor").notNull(),
-  action: text("action").notNull(), // "create" | "update" | "delete" | "import"
-  entityType: text("entity_type").notNull(), // "word" | "definition" | "import"
-  entityId: integer("entity_id").notNull(),
-  summary: text("summary"),
-  createdAt: text("created_at")
-    .notNull()
-    .default(sql`(current_timestamp)`),
-});
+export const activityLog = sqliteTable(
+  "activity_log",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    actor: text("actor").notNull(),
+    action: text("action").notNull(), // "create" | "update" | "delete" | "import"
+    entityType: text("entity_type").notNull(), // "word" | "definition" | "import"
+    entityId: integer("entity_id").notNull(),
+    summary: text("summary"),
+    /**
+     * Uploaded workbook name for "import" rows, null for everything else. Its
+     * own column rather than text folded into `summary` so it can be filtered
+     * and sorted on, and so a filename containing the separator can't make the
+     * stored record ambiguous.
+     */
+    fileName: text("file_name"),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(current_timestamp)`),
+  },
+  // /admin/imports reads this table filtered to one action and ordered newest
+  // first; without the index that is a scan of every row the whole app has
+  // ever logged, which grows far faster than the import rows being shown.
+  (table) => [index("activity_log_action_id_idx").on(table.action, table.id)],
+);

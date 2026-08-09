@@ -15,6 +15,8 @@ import { canManageCollaborators } from "@/lib/owners";
 import { parseWorkbook } from "@/lib/xlsx-import";
 import { normalizeForSearch } from "@/lib/normalize";
 import { normalizeTibetanTerm } from "@/lib/tibetan";
+import { cleanFileName } from "@/lib/text";
+import { userFacingMessage } from "@/lib/errors";
 import {
   resolveSources,
   normalizeSourceKey,
@@ -38,8 +40,9 @@ async function logActivity(
   entityType: ActivityEntity,
   entityId: number,
   summary?: string,
+  fileName?: string,
 ) {
-  await db.insert(activityLog).values({ actor, action, entityType, entityId, summary });
+  await db.insert(activityLog).values({ actor, action, entityType, entityId, summary, fileName });
 }
 
 function requiredField(formData: FormData, name: string): string {
@@ -321,7 +324,7 @@ export async function importWorkbookAction(formData: FormData) {
   }
   // The original filename, not just row counts, so /admin/imports can answer
   // "who uploaded which book" — the actual question this gets asked.
-  const fileName = file.name.slice(0, 200);
+  const fileName = cleanFileName(file.name);
 
   let grouped: Map<string, { term: string; rows: { sourceRaw: string; definitionText: string }[] }>;
   let skipped: number;
@@ -415,10 +418,10 @@ export async function importWorkbookAction(formData: FormData) {
     `нийт ${pending.length} тодорхойлолт нэмэв` +
     (skipped > 0 ? ` (${skipped} мөр алгассан)` : "");
 
-  // Filename goes into the stored record (shown on /admin/imports) but not
-  // the on-page notice — the person who just uploaded already knows what
-  // they uploaded; the filename matters to whoever reviews history later.
-  await logActivity(session.name, "import", "import", pending.length, `"${fileName}" — ${summary}`);
+  // Filename is stored in its own column (shown on /admin/imports) but kept
+  // out of the on-page notice — the person who just uploaded already knows
+  // what they uploaded; it matters to whoever reviews the history later.
+  await logActivity(session.name, "import", "import", pending.length, summary, fileName);
   revalidatePath("/");
   redirect(`/admin?notice=${encodeURIComponent(summary)}`);
 }
@@ -429,7 +432,17 @@ export async function renameSourceAction(sourceId: number, formData: FormData) {
   const session = await verifySession();
   const newTitle = requiredField(formData, "title");
 
-  const resultId = await renameSource(sourceId, newTitle);
+  // renameSource falls through to mergeSources when the new title collides
+  // with an existing source, so it can fail the same way an explicit merge
+  // can — another admin removing that source first. Same guard as below.
+  let resultId: number;
+  try {
+    resultId = await renameSource(sourceId, newTitle);
+  } catch (error) {
+    const message = userFacingMessage(error, "Нэрийг өөрчилж чадсангүй.");
+    redirect(`/admin/sources?error=${encodeURIComponent(message)}`);
+  }
+
   const merged = resultId !== sourceId;
 
   await logActivity(
@@ -465,7 +478,7 @@ export async function mergeSourcesIntoAction(fromId: number, formData: FormData)
     // just merged/deleted it) — same stale-selection race deleteSourceAction
     // already guards against, so it gets the same friendly-message treatment
     // instead of crashing to Next's generic error page.
-    const message = error instanceof Error ? error.message : "Нэгтгэж чадсангүй.";
+    const message = userFacingMessage(error, "Нэгтгэж чадсангүй.");
     redirect(`/admin/sources?error=${encodeURIComponent(message)}`);
   }
 
@@ -481,7 +494,7 @@ export async function deleteSourceAction(sourceId: number) {
   try {
     await deleteSourceIfUnused(sourceId);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Устгаж чадсангүй.";
+    const message = userFacingMessage(error, "Устгаж чадсангүй.");
     redirect(`/admin/sources?error=${encodeURIComponent(message)}`);
   }
 
