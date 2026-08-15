@@ -19,6 +19,8 @@ export async function getWordById(id: number) {
       sourceTitle: sources.title,
       // Fallback for the handful of legacy rows a migration couldn't backfill.
       sourceFallback: definitions.source,
+      sourceFile: definitions.sourceFile,
+      createdBy: definitions.createdBy,
     })
     .from(definitions)
     .leftJoin(sources, eq(definitions.sourceId, sources.id))
@@ -32,6 +34,8 @@ export async function getWordById(id: number) {
       meaningNumber: row.meaningNumber,
       definitionText: row.definitionText,
       source: row.sourceTitle ?? row.sourceFallback,
+      sourceFile: row.sourceFile,
+      createdBy: row.createdBy,
     })),
   };
 }

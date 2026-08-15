@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 
-export type DefinitionRow = { source: string; definitionText: string };
+export type DefinitionRow = {
+  source: string;
+  definitionText: string;
+  /** Workbook it was imported from; absent when typed in directly. */
+  sourceFile?: string | null;
+  createdBy?: string | null;
+};
 
 const inputClass =
   "w-full rounded-md border border-border bg-surface px-3 py-2 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary-light";
@@ -85,8 +91,16 @@ export function WordForm({
         <div className="mt-3 flex flex-col gap-4">
           {rows.map((row, index) => (
             <div key={row.key} className="rounded-md border border-border bg-surface p-4">
-              <div className="flex items-center justify-between">
-                <span className="font-serif text-sm text-primary">{index + 1}.</span>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-serif text-sm text-primary">
+                  {index + 1}.
+                  {(row.createdBy || row.sourceFile) && (
+                    <span className="ml-2 font-sans text-xs font-normal text-muted-foreground">
+                      {row.createdBy}
+                      {row.sourceFile ? ` · ${row.sourceFile}` : " · гараар"}
+                    </span>
+                  )}
+                </span>
                 {rows.length > 1 && (
                   <button
                     type="button"

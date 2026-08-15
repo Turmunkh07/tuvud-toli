@@ -73,3 +73,60 @@ function escapeHtml(value: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 }
+
+export type ConflictNotice = {
+  to: string[];
+  uploadedBy: string;
+  fileName: string | null;
+  conflictCount: number;
+  reviewUrl: string;
+  /** A few examples so the mail is actionable without opening the site. */
+  samples: { term: string; source: string }[];
+};
+
+/**
+ * One message per import, never one per word — a workbook that clashes on
+ * three hundred rows would otherwise mean three hundred emails.
+ */
+export async function sendConflictEmail(notice: ConflictNotice): Promise<void> {
+  if (notice.to.length === 0) return;
+  const transport = buildTransport();
+
+  const sampleLines = notice.samples.map((s) => `  • ${s.term} — ${s.source}`);
+  const more = notice.conflictCount - notice.samples.length;
+
+  const text = [
+    `${notice.uploadedBy} шинэ файл оруулсны дараа ${notice.conflictCount} зөрчил илэрлээ.`,
+    notice.fileName ? `Файл: ${notice.fileName}` : "",
+    "",
+    "Нэг ном нэг үгийг өөр өөрөөр тодорхойлсон байна. Аль хувилбарыг үлдээхийг сонгоно уу:",
+    notice.reviewUrl,
+    "",
+    ...sampleLines,
+    more > 0 ? `  … бас ${more}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const html = `
+    <div style="font-family:Georgia,serif;line-height:1.6;color:#1b1b1b">
+      <p><strong>${escapeHtml(notice.uploadedBy)}</strong> шинэ файл оруулсны дараа
+        <strong>${notice.conflictCount}</strong> зөрчил илэрлээ.</p>
+      ${notice.fileName ? `<p style="color:#5b6360">Файл: ${escapeHtml(notice.fileName)}</p>` : ""}
+      <p>Нэг ном нэг үгийг өөр өөрөөр тодорхойлсон байна. Аль хувилбарыг үлдээхийг сонгоно уу:</p>
+      <p><a href="${escapeHtml(notice.reviewUrl)}" style="color:#2e7d32">${escapeHtml(notice.reviewUrl)}</a></p>
+      <ul style="color:#5b6360">
+        ${notice.samples.map((s) => `<li>${escapeHtml(s.term)} — ${escapeHtml(s.source)}</li>`).join("")}
+        ${more > 0 ? `<li>… бас ${more}</li>` : ""}
+      </ul>
+    </div>
+  `;
+
+  await transport.sendMail({
+    from: smtpConfigFromEnv()!.from,
+    to: notice.to.join(", "),
+    subject: `Төвөд-Монгол толь — ${notice.conflictCount} зөрчил шалгах шаардлагатай`,
+    text,
+    html,
+  });
+}

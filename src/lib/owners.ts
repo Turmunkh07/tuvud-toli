@@ -16,6 +16,15 @@ function ownerIdentifiers(): string[] {
     .filter(Boolean);
 }
 
+/**
+ * The owner entries that are email addresses, used to copy them on conflict
+ * notifications. Derived from OWNER_IDENTIFIERS rather than hardcoded, so
+ * changing who arbitrates is an env change, not a code change.
+ */
+export function listOwnerEmails(): string[] {
+  return ownerIdentifiers().filter((entry) => entry.includes("@"));
+}
+
 export function canManageCollaborators(session: SessionPayload): boolean {
   const owners = ownerIdentifiers();
 

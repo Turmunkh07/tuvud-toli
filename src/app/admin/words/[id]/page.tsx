@@ -51,6 +51,8 @@ export default async function AdminWordEditPage({
         initialDefinitions={word.definitions.map((definition) => ({
           source: definition.source,
           definitionText: definition.definitionText,
+          sourceFile: definition.sourceFile,
+          createdBy: definition.createdBy,
         }))}
         existingSources={sources.map((source) => source.title)}
         submitLabel="Хадгалах"

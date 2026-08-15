@@ -57,6 +57,16 @@ Merging words is decided by `words.term_key`, a normalised form of the headword 
 
 `/admin/imports` lists recent xlsx imports — who ran it, the original filename (its own `activity_log.file_name` column, so it can be filtered and sorted on), and its result — so it's answerable after the fact which admin contributed which book, without reviving a general activity feed on the dashboard. The list is capped at the most recent 100 and says so when capped, because `activity_log` grows with every admin action app-wide, not just imports; an index on `(action, id)` keeps the query off a full table scan. Deleting a word removes its definitions but currently leaves behind any source row that import created if nothing else references it; harmless clutter, clearable by hand from `/admin/sources`.
 
+### Conflicting definitions
+
+A source may legitimately define a word several times — those are separate senses, and rows arriving together in one workbook are all accepted. What is not legitimate is a *later* import asserting different wording for a (word, source) pair another file already covered: one of the two contributors misread the book, and keeping both would leave the entry claiming one source says two different things.
+
+Those rows are **quarantined in `definition_conflicts` rather than written into `definitions`**, so the dictionary never publishes two rival texts attributed to one source. `/admin/conflicts` shows each one side by side — existing vs incoming, who contributed each, which file — and keeping either resolves it (keeping the incoming text overwrites the definition in place rather than adding a second one). A pending count appears in red on the dashboard. Re-uploading a file whose rows are already recorded is a no-op, reported as `давхардсан`, not a conflict.
+
+One email goes out **per import, never per word** — a workbook clashing on three hundred rows would otherwise mean three hundred emails. It reaches the admin who uploaded and every email in `OWNER_IDENTIFIERS`, and nobody else: whoever contributed the wording being contradicted is deliberately not copied, so they aren't pulled into every clash someone else's spreadsheet causes — the owner tells them if the decision affects their work. An uploader who is themselves an owner gets one message, not two. `ADMIN_USERS` accounts have no email address, so an import by one of those notifies the owners only. A send failure is swallowed, since the conflicts are already recorded and the page shows the same information.
+
+`definitions.source_file` and `definitions.created_by` record where each definition came from, shown per row on the word edit form. They're deliberately not on the public word page — a reader has no use for an internal spreadsheet filename.
+
 A first row without Tibetan characters in column B is treated as a header and skipped. Rows missing any of the three columns are skipped and reported. Rows sharing the same Tibetan word become multiple definitions on a single entry, and if that word already exists in the database the new definitions are appended to it rather than creating a duplicate.
 
 Uploads are capped at 4MB (`serverActions.bodySizeLimit` in `next.config.ts`, kept under Vercel's 4.5MB request limit).

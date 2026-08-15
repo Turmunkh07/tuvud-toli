@@ -71,12 +71,58 @@ export const definitions = sqliteTable(
     definitionText: text("definition_text").notNull(),
     /** Lowercased mirror of definitionText; see lib/normalize.ts. Always write both. */
     definitionTextLower: text("definition_text_lower"),
+    /** Workbook this came from; null when typed directly into the CMS. */
+    sourceFile: text("source_file"),
+    /** Admin who contributed it, so a conflict can notify the other party. */
+    createdBy: text("created_by"),
   },
   (table) => [
     index("definitions_word_id_idx").on(table.wordId),
     index("definitions_text_lower_idx").on(table.definitionTextLower),
     index("definitions_source_id_idx").on(table.sourceId),
+    // Conflict detection asks "does this word already have definitions from
+    // this exact source?" for every incoming row.
+    index("definitions_word_source_idx").on(table.wordId, table.sourceId),
   ],
+);
+
+/**
+ * An incoming definition that contradicts one already recorded for the same
+ * word from the same book. Held here rather than written into `definitions`,
+ * so the live dictionary never shows two rival texts attributed to one source
+ * — an admin decides which is right on /admin/conflicts and only then does it
+ * land (or get dropped).
+ *
+ * `existingText` is snapshotted rather than read through the FK at display
+ * time: the definition it clashes with can be edited or removed while the
+ * conflict sits unresolved, and the reviewer needs to see what was actually
+ * compared.
+ */
+export const definitionConflicts = sqliteTable(
+  "definition_conflicts",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    wordId: integer("word_id")
+      .notNull()
+      .references(() => words.id, { onDelete: "cascade" }),
+    sourceId: integer("source_id")
+      .notNull()
+      .references(() => sources.id, { onDelete: "cascade" }),
+    /** Null once the definition it clashed with has since been deleted. */
+    existingDefinitionId: integer("existing_definition_id").references(() => definitions.id, {
+      onDelete: "set null",
+    }),
+    existingText: text("existing_text").notNull(),
+    incomingText: text("incoming_text").notNull(),
+    /** Who contributed the definition already on record, where known. */
+    existingUploadedBy: text("existing_uploaded_by"),
+    fileName: text("file_name"),
+    uploadedBy: text("uploaded_by").notNull(),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(current_timestamp)`),
+  },
+  (table) => [index("definition_conflicts_word_idx").on(table.wordId)],
 );
 
 export const wordsRelations = relations(words, ({ many }) => ({

@@ -5,6 +5,7 @@ import { SearchResults } from "@/components/SearchResults";
 import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
 import { listCollaborators } from "@/lib/collaborators";
 import { canManageCollaborators } from "@/lib/owners";
+import { countOpenConflicts } from "@/lib/conflicts";
 import { CleanFlashUrl } from "@/components/CleanFlashUrl";
 import {
   logoutAction,
@@ -28,9 +29,10 @@ export default async function AdminDashboardPage({
   const canManage = canManageCollaborators(session);
   const { q, tab, page, notice, error } = await searchParams;
   const query = (q ?? "").trim();
-  const [results, collaborators] = await Promise.all([
+  const [results, collaborators, conflictCount] = await Promise.all([
     query ? searchWords(query, parseTab(tab), parsePage(page)) : Promise.resolve(null),
     listCollaborators(),
+    countOpenConflicts(),
   ]);
 
   return (
@@ -94,6 +96,16 @@ export default async function AdminDashboardPage({
             </Link>
             <Link href="/admin/imports" className="text-sm text-primary hover:underline">
               Импортын түүх
+            </Link>
+            <Link
+              href="/admin/conflicts"
+              className={
+                conflictCount > 0
+                  ? "text-sm font-medium text-red-700 hover:underline"
+                  : "text-sm text-primary hover:underline"
+              }
+            >
+              Зөрчил{conflictCount > 0 ? ` (${conflictCount})` : ""}
             </Link>
             <a href="/admin/template" className="text-sm text-primary hover:underline" download>
               ↓ Загвар файл татах

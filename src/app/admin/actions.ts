@@ -5,13 +5,20 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { db } from "@/db";
-import { words, definitions, activityLog, admins } from "@/db/schema";
+import { words, definitions, activityLog, admins, sources } from "@/db/schema";
 import { generatePassword, hashPassword } from "@/lib/password";
-import { isMailConfigured, sendInviteEmail } from "@/lib/mailer";
+import { isMailConfigured, sendInviteEmail, sendConflictEmail } from "@/lib/mailer";
+import {
+  splitOutConflicts,
+  recordConflicts,
+  resolveConflictKeepIncoming,
+  resolveConflictKeepExisting,
+  type PendingConflict,
+} from "@/lib/conflicts";
 import { verifyAdminCredentials } from "@/lib/admin-users";
 import { createSession, destroySession } from "@/lib/session";
 import { verifySession } from "@/lib/dal";
-import { canManageCollaborators } from "@/lib/owners";
+import { canManageCollaborators, listOwnerEmails } from "@/lib/owners";
 import { parseWorkbook } from "@/lib/xlsx-import";
 import { normalizeForSearch } from "@/lib/normalize";
 import { normalizeTibetanTerm } from "@/lib/tibetan";
@@ -60,7 +67,7 @@ function requiredField(formData: FormData, name: string): string {
  * same source; a name not seen before creates one — rather than stored as
  * free text, so it can never split into near-duplicates by spelling variance.
  */
-async function readDefinitionRows(formData: FormData) {
+async function readDefinitionRows(formData: FormData, actor: string) {
   const rawSources = formData.getAll("source").map((v) => String(v).trim());
   const texts = formData.getAll("definitionText").map((v) => String(v).trim());
 
@@ -89,6 +96,9 @@ async function readDefinitionRows(formData: FormData) {
       definitionText: row.definitionText,
       meaningNumber: index + 1,
       definitionTextLower: normalizeForSearch(row.definitionText),
+      // Null file: typed into the CMS rather than imported from a workbook.
+      sourceFile: null,
+      createdBy: actor,
     };
   });
 }
@@ -133,7 +143,7 @@ export async function logoutAction() {
 export async function createWordAction(formData: FormData) {
   const session = await verifySession();
   const termTibetan = requiredField(formData, "termTibetan");
-  const rows = await readDefinitionRows(formData);
+  const rows = await readDefinitionRows(formData, session.name);
   const termKey = normalizeTibetanTerm(termTibetan);
 
   // Adding a word another source already contributed appends to it rather than
@@ -185,7 +195,7 @@ export async function createWordAction(formData: FormData) {
 export async function updateWordAction(wordId: number, formData: FormData) {
   const session = await verifySession();
   const termTibetan = requiredField(formData, "termTibetan");
-  const rows = await readDefinitionRows(formData);
+  const rows = await readDefinitionRows(formData, session.name);
 
   await db
     .update(words)
@@ -384,6 +394,24 @@ export async function importWorkbookAction(formData: FormData) {
   );
   const resolvedSources = await resolveSources(allSourceTexts);
 
+  const incoming: { wordId: number; sourceId: number; definitionText: string }[] = [];
+  for (const [key, group] of grouped) {
+    const wordId = existing.get(key)!;
+    for (const row of group.rows) {
+      const source = resolvedSources.get(normalizeSourceKey(row.sourceRaw))!;
+      incoming.push({ wordId, sourceId: source.id, definitionText: row.definitionText });
+    }
+  }
+
+  // Rows that contradict what another file already recorded for the same
+  // word from the same book are held back rather than written in, so the
+  // dictionary never publishes two rival texts attributed to one source.
+  const { accepted, duplicateCount, conflicts } = await splitOutConflicts(incoming);
+
+  const sourceTitleById = new Map(
+    Array.from(resolvedSources.values()).map((source) => [source.id, source.title]),
+  );
+
   const pending: {
     wordId: number;
     meaningNumber: number;
@@ -391,32 +419,41 @@ export async function importWorkbookAction(formData: FormData) {
     sourceId: number;
     definitionText: string;
     definitionTextLower: string;
+    sourceFile: string;
+    createdBy: string;
   }[] = [];
-  for (const [key, group] of grouped) {
-    const wordId = existing.get(key)!;
-    let counter = nextNumber.get(wordId) ?? 0;
-    for (const row of group.rows) {
-      counter += 1;
-      const source = resolvedSources.get(normalizeSourceKey(row.sourceRaw))!;
-      pending.push({
-        wordId,
-        meaningNumber: counter,
-        source: source.title,
-        sourceId: source.id,
-        definitionText: row.definitionText,
-        definitionTextLower: normalizeForSearch(row.definitionText),
-      });
-    }
+  const perWordCounter = new Map<number, number>();
+  for (const row of accepted) {
+    const counter = (perWordCounter.get(row.wordId) ?? nextNumber.get(row.wordId) ?? 0) + 1;
+    perWordCounter.set(row.wordId, counter);
+    pending.push({
+      wordId: row.wordId,
+      meaningNumber: counter,
+      source: sourceTitleById.get(row.sourceId) ?? "",
+      sourceId: row.sourceId,
+      definitionText: row.definitionText,
+      definitionTextLower: normalizeForSearch(row.definitionText),
+      sourceFile: fileName,
+      createdBy: session.name,
+    });
   }
 
   for (let i = 0; i < pending.length; i += 100) {
     await db.insert(definitions).values(pending.slice(i, i + 100));
   }
 
+  await recordConflicts(conflicts, session.name, fileName);
+
   const summary =
     `${newKeys.length} шинэ үг, ${keys.length - newKeys.length} одоо байгаа үгэнд ` +
     `нийт ${pending.length} тодорхойлолт нэмэв` +
+    (duplicateCount > 0 ? `, ${duplicateCount} давхардсан` : "") +
+    (conflicts.length > 0 ? `, ${conflicts.length} зөрчилтэй` : "") +
     (skipped > 0 ? ` (${skipped} мөр алгассан)` : "");
+
+  if (conflicts.length > 0) {
+    await notifyAboutConflicts(conflicts, session.name, fileName);
+  }
 
   // Filename is stored in its own column (shown on /admin/imports) but kept
   // out of the on-page notice — the person who just uploaded already knows
@@ -424,6 +461,103 @@ export async function importWorkbookAction(formData: FormData) {
   await logActivity(session.name, "import", "import", pending.length, summary, fileName);
   revalidatePath("/");
   redirect(`/admin?notice=${encodeURIComponent(summary)}`);
+}
+
+/**
+ * A single message per import to everyone with a stake in the disagreement:
+ * whoever just uploaded, whoever contributed the wording it clashes with, and
+ * the owners who arbitrate. Failure to send never fails the import — the
+ * conflicts are already saved and visible on /admin/conflicts.
+ */
+async function notifyAboutConflicts(
+  conflicts: PendingConflict[],
+  uploadedBy: string,
+  fileName: string | null,
+) {
+  if (!isMailConfigured()) return;
+
+  // The owners, plus whoever just uploaded — deliberately NOT whoever
+  // contributed the wording being contradicted. They find out from the owner
+  // if the decision affects their work, rather than being pulled into every
+  // clash someone else's spreadsheet happens to cause.
+  const recipients = new Set(listOwnerEmails());
+
+  // ADMIN_USERS accounts have no email; only invited collaborators are mailable.
+  const [uploader] = await db
+    .select({ email: admins.email })
+    .from(admins)
+    .where(eq(admins.name, uploadedBy));
+  if (uploader) recipients.add(uploader.email);
+
+  if (recipients.size === 0) return;
+
+  const wordIds = Array.from(new Set(conflicts.map((c) => c.wordId))).slice(0, 5);
+  const sampleWords = await db
+    .select({ id: words.id, termTibetan: words.termTibetan })
+    .from(words)
+    .where(inArray(words.id, wordIds));
+  const termById = new Map(sampleWords.map((w) => [w.id, w.termTibetan]));
+
+  const sourceIds = Array.from(new Set(conflicts.map((c) => c.sourceId)));
+  const sourceRows = await db
+    .select({ id: sources.id, title: sources.title })
+    .from(sources)
+    .where(inArray(sources.id, sourceIds));
+  const sourceById = new Map(sourceRows.map((s) => [s.id, s.title]));
+
+  const samples = conflicts.slice(0, 5).map((conflict) => ({
+    term: termById.get(conflict.wordId) ?? `#${conflict.wordId}`,
+    source: sourceById.get(conflict.sourceId) ?? "",
+  }));
+
+  try {
+    await sendConflictEmail({
+      to: Array.from(recipients),
+      uploadedBy,
+      fileName,
+      conflictCount: conflicts.length,
+      reviewUrl: `${await resolveAppUrl()}/admin/conflicts`,
+      samples,
+    });
+  } catch {
+    // Deliberately swallowed: the import succeeded and the conflicts are
+    // recorded. Failing here would roll the admin into an error page over a
+    // notification, and the review page shows the same information.
+  }
+}
+
+// --- Conflicts ---
+
+export async function keepIncomingDefinitionAction(conflictId: number) {
+  const session = await verifySession();
+
+  let wordId: number;
+  try {
+    ({ termId: wordId } = await resolveConflictKeepIncoming(conflictId, session.name));
+  } catch (error) {
+    const message = userFacingMessage(error, "Зөрчлийг шийдэж чадсангүй.");
+    redirect(`/admin/conflicts?error=${encodeURIComponent(message)}`);
+  }
+
+  await logActivity(session.name, "update", "definition", conflictId, "conflict: kept incoming");
+  revalidatePath("/");
+  revalidatePath(`/word/${wordId}`);
+  redirect(`/admin/conflicts?notice=${encodeURIComponent("Шинэ хувилбарыг үлдээлээ.")}`);
+}
+
+export async function keepExistingDefinitionAction(conflictId: number) {
+  const session = await verifySession();
+
+  try {
+    await resolveConflictKeepExisting(conflictId);
+  } catch (error) {
+    const message = userFacingMessage(error, "Зөрчлийг шийдэж чадсангүй.");
+    redirect(`/admin/conflicts?error=${encodeURIComponent(message)}`);
+  }
+
+  await logActivity(session.name, "update", "definition", conflictId, "conflict: kept existing");
+  revalidatePath("/admin/conflicts");
+  redirect(`/admin/conflicts?notice=${encodeURIComponent("Одоо байгаа хувилбарыг үлдээлээ.")}`);
 }
 
 // --- Sources ---
