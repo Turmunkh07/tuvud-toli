@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { after } from "next/server";
 import { getWordById } from "@/lib/words";
+import { recordWordView } from "@/lib/views";
+import { CopyCitation } from "@/components/CopyCitation";
 
 type Definition = {
   id: number;
@@ -35,6 +38,10 @@ export default async function WordPage({
 
   const word = await getWordById(wordId);
   if (!word) notFound();
+
+  // Counted after the response is sent, so a reader never waits on a write
+  // and a failed counter cannot break the page.
+  after(() => recordWordView(wordId));
 
   const grouped = groupBySource(word.definitions);
 
@@ -71,6 +78,11 @@ export default async function WordPage({
                   </li>
                 ))}
               </ol>
+
+              {/* One citation per work: `s.v.` cites the entry, not a sense. */}
+              <div className="pl-4">
+                <CopyCitation term={word.termTibetan} source={source} wordId={word.id} />
+              </div>
             </section>
           ))}
         </div>

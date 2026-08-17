@@ -14,7 +14,7 @@ import { createClient } from "@libsql/client";
 import { eq } from "drizzle-orm";
 import { words, definitions, sources } from "./schema";
 import { normalizeForSearch } from "../lib/normalize";
-import { normalizeTibetanTerm } from "../lib/tibetan";
+import { wordIndexFields } from "../lib/tibetan";
 
 // Inlined rather than imported from lib/sources.ts, which is guarded with
 // 'server-only' and throws when loaded outside the Next.js bundler.
@@ -143,7 +143,7 @@ async function seed() {
       .insert(words)
       .values({
         termTibetan: word.termTibetan,
-        termKey: normalizeTibetanTerm(word.termTibetan),
+        ...wordIndexFields(word.termTibetan),
       })
       .returning({ id: words.id });
 

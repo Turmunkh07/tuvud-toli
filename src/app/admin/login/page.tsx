@@ -13,7 +13,7 @@ export default async function AdminLoginPage({
       <CleanFlashUrl />
       <div className="w-full max-w-sm">
         <h1 className="font-serif text-2xl font-semibold text-foreground">Админ нэвтрэх</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Толь бичгийн удирдлагын самбар</p>
+        <p className="mt-1 text-sm text-muted-foreground">Толь бичиг хянах самбар</p>
 
         {error && (
           <p className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">

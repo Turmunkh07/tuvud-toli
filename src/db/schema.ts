@@ -14,6 +14,15 @@ export const words = sqliteTable(
      * without drizzle-kit rebuilding (and emptying) the table.
      */
     termKey: text("term_key"),
+    /**
+     * The མིང་གཞི་ this word files under (see lib/tibetan.ts). Stored rather
+     * than derived per query so browsing a letter is an indexed lookup.
+     */
+    rootLetter: text("root_letter"),
+    /** Root-letter-first ordering key; plain codepoint order is not Tibetan order. */
+    sortKey: text("sort_key"),
+    /** Times the public entry has been opened; drives "most looked up". */
+    viewCount: integer("view_count").notNull().default(0),
     createdAt: text("created_at")
       .notNull()
       .default(sql`(current_timestamp)`),
@@ -24,7 +33,42 @@ export const words = sqliteTable(
   (table) => [
     index("words_term_tibetan_idx").on(table.termTibetan),
     index("words_term_key_idx").on(table.termKey),
+    index("words_root_letter_idx").on(table.rootLetter),
+    index("words_sort_key_idx").on(table.sortKey),
   ],
+);
+
+/**
+ * A word's state immediately before an edit or deletion, so a change made by
+ * one of ten contributors over several years can be inspected and put back.
+ * The definitions are snapshotted as JSON rather than rows: a restore has to
+ * reproduce what was there, not chase foreign keys that may since have moved.
+ */
+export const wordRevisions = sqliteTable(
+  "word_revisions",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    /** Not a foreign key: the row survives deletion of the word it describes. */
+    wordId: integer("word_id").notNull(),
+    termTibetan: text("term_tibetan").notNull(),
+    termKey: text("term_key"),
+    /** JSON array of { source, sourceId, definitionText, meaningNumber, ... }. */
+    definitionsJson: text("definitions_json").notNull(),
+    /**
+     * Comma-separated workbook names the archived definitions came from. The
+     * files themselves are never stored — only ever uploaded — so this points
+     * at which spreadsheet to go back to, and at the matching /admin/imports
+     * row. Words entered by hand carry no file and are not archived at all.
+     */
+    sourceFiles: text("source_files"),
+    /** "update" or "delete" — what was about to happen when this was taken. */
+    action: text("action").notNull(),
+    actor: text("actor").notNull(),
+    createdAt: text("created_at")
+      .notNull()
+      .default(sql`(current_timestamp)`),
+  },
+  (table) => [index("word_revisions_word_idx").on(table.wordId, table.id)],
 );
 
 /**
@@ -206,3 +250,4 @@ export const activityLog = sqliteTable(
   // ever logged, which grows far faster than the import rows being shown.
   (table) => [index("activity_log_action_id_idx").on(table.action, table.id)],
 );
+

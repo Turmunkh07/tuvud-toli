@@ -1,7 +1,7 @@
 import "server-only";
-import { eq, inArray, sql, count } from "drizzle-orm";
+import { eq, inArray, sql, count, asc } from "drizzle-orm";
 import { db } from "@/db";
-import { sources, definitions } from "@/db/schema";
+import { sources, definitions, words } from "@/db/schema";
 import { UserFacingError } from "@/lib/errors";
 
 /**
@@ -84,6 +84,32 @@ export async function resolveSources(
   }
 
   return byKey;
+}
+
+/**
+ * Everything one book contributed, in dictionary order — the view a
+ * contributor needs to check their own import landed as intended, and the
+ * one that answers "how far does this source actually cover".
+ */
+export async function getSourceWithEntries(id: number) {
+  const [source] = await db.select().from(sources).where(eq(sources.id, id));
+  if (!source) return null;
+
+  const entries = await db
+    .select({
+      definitionId: definitions.id,
+      wordId: definitions.wordId,
+      termTibetan: words.termTibetan,
+      definitionText: definitions.definitionText,
+      sourceFile: definitions.sourceFile,
+      createdBy: definitions.createdBy,
+    })
+    .from(definitions)
+    .innerJoin(words, eq(definitions.wordId, words.id))
+    .where(eq(definitions.sourceId, id))
+    .orderBy(asc(words.sortKey), asc(definitions.meaningNumber));
+
+  return { source, entries };
 }
 
 export async function renameSource(id: number, newTitleRaw: string) {

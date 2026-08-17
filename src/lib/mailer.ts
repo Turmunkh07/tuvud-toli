@@ -99,7 +99,7 @@ export async function sendConflictEmail(notice: ConflictNotice): Promise<void> {
     `${notice.uploadedBy} шинэ файл оруулсны дараа ${notice.conflictCount} зөрчил илэрлээ.`,
     notice.fileName ? `Файл: ${notice.fileName}` : "",
     "",
-    "Нэг ном нэг үгийг өөр өөрөөр тодорхойлсон байна. Аль хувилбарыг үлдээхийг сонгоно уу:",
+    "Эх сурвалж дунд зөрчил гарлаа. Аль хувилбарыг үлдээхийг доорх хуудаснаас сонгоно уу:",
     notice.reviewUrl,
     "",
     ...sampleLines,
@@ -113,7 +113,7 @@ export async function sendConflictEmail(notice: ConflictNotice): Promise<void> {
       <p><strong>${escapeHtml(notice.uploadedBy)}</strong> шинэ файл оруулсны дараа
         <strong>${notice.conflictCount}</strong> зөрчил илэрлээ.</p>
       ${notice.fileName ? `<p style="color:#5b6360">Файл: ${escapeHtml(notice.fileName)}</p>` : ""}
-      <p>Нэг ном нэг үгийг өөр өөрөөр тодорхойлсон байна. Аль хувилбарыг үлдээхийг сонгоно уу:</p>
+      <p>Эх сурвалж дунд зөрчил гарлаа. Аль хувилбарыг үлдээхийг доорх хуудаснаас сонгоно уу:</p>
       <p><a href="${escapeHtml(notice.reviewUrl)}" style="color:#2e7d32">${escapeHtml(notice.reviewUrl)}</a></p>
       <ul style="color:#5b6360">
         ${notice.samples.map((s) => `<li>${escapeHtml(s.term)} — ${escapeHtml(s.source)}</li>`).join("")}

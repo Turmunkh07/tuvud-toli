@@ -11,7 +11,10 @@
     "start": "next start",
     "lint": "eslint",
     "db:generate": "drizzle-kit generate",
-    "db:push": "drizzle-kit push",
+    "db:migrate": "tsx src/scripts/db-migrate.ts",
+    "db:backup": "tsx src/scripts/db-backup.ts",
+    "db:restore": "tsx src/scripts/db-restore.ts",
+    "db:plan": "drizzle-kit push --verbose",
     "db:studio": "drizzle-kit studio",
     "seed": "tsx src/db/seed.ts",
     "test:email": "tsx src/scripts/test-email.ts"

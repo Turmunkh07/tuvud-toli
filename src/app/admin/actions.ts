@@ -21,7 +21,8 @@ import { verifySession } from "@/lib/dal";
 import { canManageCollaborators, listOwnerEmails } from "@/lib/owners";
 import { parseWorkbook } from "@/lib/xlsx-import";
 import { normalizeForSearch } from "@/lib/normalize";
-import { normalizeTibetanTerm } from "@/lib/tibetan";
+import { normalizeTibetanTerm, wordIndexFields } from "@/lib/tibetan";
+import { snapshotWord, restoreRevision } from "@/lib/revisions";
 import { cleanFileName } from "@/lib/text";
 import { userFacingMessage } from "@/lib/errors";
 import {
@@ -180,7 +181,7 @@ export async function createWordAction(formData: FormData) {
 
   const [word] = await db
     .insert(words)
-    .values({ termTibetan, termKey })
+    .values({ termTibetan, ...wordIndexFields(termTibetan) })
     .returning({ id: words.id });
 
   if (rows.length > 0) {
@@ -197,11 +198,14 @@ export async function updateWordAction(wordId: number, formData: FormData) {
   const termTibetan = requiredField(formData, "termTibetan");
   const rows = await readDefinitionRows(formData, session.name);
 
+  // Taken before anything changes, so the snapshot holds what is about to be lost.
+  await snapshotWord(wordId, "update", session.name);
+
   await db
     .update(words)
     .set({
       termTibetan,
-      termKey: normalizeTibetanTerm(termTibetan),
+      ...wordIndexFields(termTibetan),
       updatedAt: new Date().toISOString(),
     })
     .where(eq(words.id, wordId));
@@ -225,6 +229,9 @@ export async function deleteWordAction(wordId: number) {
     .select({ termTibetan: words.termTibetan })
     .from(words)
     .where(eq(words.id, wordId));
+
+  // Deletion cascades to every definition, so the snapshot is the only way back.
+  await snapshotWord(wordId, "delete", session.name);
 
   await db.delete(words).where(eq(words.id, wordId));
 
@@ -369,7 +376,12 @@ export async function importWorkbookAction(formData: FormData) {
     const chunk = newKeys.slice(i, i + 100);
     const inserted = await db
       .insert(words)
-      .values(chunk.map((key) => ({ termTibetan: grouped.get(key)!.term, termKey: key })))
+      .values(
+        chunk.map((key) => {
+          const term = grouped.get(key)!.term;
+          return { termTibetan: term, ...wordIndexFields(term) };
+        }),
+      )
       .returning({ id: words.id, termKey: words.termKey });
     for (const row of inserted) if (row.termKey) existing.set(row.termKey, row.id);
   }
@@ -524,6 +536,37 @@ async function notifyAboutConflicts(
     // recorded. Failing here would roll the admin into an error page over a
     // notification, and the review page shows the same information.
   }
+}
+
+// --- History ---
+
+export async function restoreRevisionAction(revisionId: number) {
+  const session = await verifySession();
+
+  let restored: { wordId: number; termTibetan: string; recreated: boolean };
+  try {
+    restored = await restoreRevision(revisionId, session.name);
+  } catch (error) {
+    const message = userFacingMessage(error, "Сэргээж чадсангүй.");
+    redirect(`/admin/history?error=${encodeURIComponent(message)}`);
+  }
+
+  await logActivity(
+    session.name,
+    "update",
+    "word",
+    restored.wordId,
+    `restored: ${restored.termTibetan}`,
+  );
+  revalidatePath("/");
+  revalidatePath(`/word/${restored.wordId}`);
+  redirect(
+    `/admin/words/${restored.wordId}?notice=${encodeURIComponent(
+      restored.recreated
+        ? "Устгасан үгийг сэргээлээ."
+        : "Өмнөх хувилбарыг сэргээлээ.",
+    )}`,
+  );
 }
 
 // --- Conflicts ---

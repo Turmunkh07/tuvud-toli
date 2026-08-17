@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { WordList } from "@/components/WordList";
 import { PAGE_SIZE, type SearchResults as Results, type SearchTab } from "@/lib/search";
 
 /**
@@ -52,23 +53,9 @@ export function SearchResults({
         <p className="mt-4 text-sm text-muted-foreground">Ийм үг олдсонгүй.</p>
       ) : (
         <>
-          <ul className="mt-4 divide-y divide-border rounded-md border border-border bg-surface">
-            {items.map((word) => (
-              <li key={word.id}>
-                <Link
-                  href={`${wordHrefPrefix}/${word.id}`}
-                  className="block px-4 py-3 hover:bg-primary-light/10"
-                >
-                  <span className="tibetan text-xl text-foreground">{word.termTibetan}</span>
-                  {word.preview && (
-                    <span className="mt-0.5 block truncate text-sm text-muted-foreground">
-                      {word.preview}
-                    </span>
-                  )}
-                </Link>
-              </li>
-            ))}
-          </ul>
+          <div className="mt-4">
+            <WordList items={items} hrefPrefix={wordHrefPrefix} />
+          </div>
 
           <div className="mt-3 flex items-center justify-between gap-4 text-sm">
             <p className="text-muted-foreground">

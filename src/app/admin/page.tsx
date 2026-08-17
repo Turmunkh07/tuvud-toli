@@ -6,6 +6,7 @@ import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
 import { listCollaborators } from "@/lib/collaborators";
 import { canManageCollaborators } from "@/lib/owners";
 import { countOpenConflicts } from "@/lib/conflicts";
+import { getAdminStats } from "@/lib/stats";
 import { CleanFlashUrl } from "@/components/CleanFlashUrl";
 import {
   logoutAction,
@@ -29,10 +30,11 @@ export default async function AdminDashboardPage({
   const canManage = canManageCollaborators(session);
   const { q, tab, page, notice, error } = await searchParams;
   const query = (q ?? "").trim();
-  const [results, collaborators, conflictCount] = await Promise.all([
+  const [results, collaborators, conflictCount, stats] = await Promise.all([
     query ? searchWords(query, parseTab(tab), parsePage(page)) : Promise.resolve(null),
     listCollaborators(),
     countOpenConflicts(),
+    getAdminStats(),
   ]);
 
   return (
@@ -40,7 +42,7 @@ export default async function AdminDashboardPage({
       <CleanFlashUrl />
       <header className="flex items-center justify-between border-b border-border pb-4">
         <div>
-          <h1 className="font-serif text-2xl font-semibold text-foreground">Удирдлагын самбар</h1>
+          <h1 className="font-serif text-2xl font-semibold text-foreground">Хяналтын самбар</h1>
           <p className="text-sm text-muted-foreground">Нэвтэрсэн: {session.name}</p>
         </div>
         <form action={logoutAction}>
@@ -60,6 +62,25 @@ export default async function AdminDashboardPage({
           {error}
         </p>
       )}
+
+      <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[
+          { label: "Нийт үгсийн тоо", value: stats.wordCount },
+          { label: "Эх сурвалжийн тоо", value: stats.sourceCount },
+          { label: "Хамтран ажиллагч", value: collaborators.length },
+          { label: "Импортын тоо", value: stats.importCount },
+        ].map((stat) => (
+          <div
+            key={stat.label}
+            className="rounded-md border border-border bg-surface px-3 py-2"
+          >
+            <p className="font-serif text-2xl font-semibold text-brown">
+              {stat.value.toLocaleString("mn-MN")}
+            </p>
+            <p className="text-xs text-muted-foreground">{stat.label}</p>
+          </div>
+        ))}
+      </section>
 
       <section className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <form action="/admin" className="flex flex-1 gap-2">
@@ -97,6 +118,9 @@ export default async function AdminDashboardPage({
             <Link href="/admin/imports" className="text-sm text-primary hover:underline">
               Импортын түүх
             </Link>
+            <Link href="/admin/history" className="text-sm text-primary hover:underline">
+              Түүх
+            </Link>
             <Link
               href="/admin/conflicts"
               className={
@@ -108,7 +132,10 @@ export default async function AdminDashboardPage({
               Зөрчил{conflictCount > 0 ? ` (${conflictCount})` : ""}
             </Link>
             <a href="/admin/template" className="text-sm text-primary hover:underline" download>
-              ↓ Загвар файл татах
+              ↓ Загвар
+            </a>
+            <a href="/admin/export" className="text-sm text-primary hover:underline" download>
+              ↓ Бүгдийг татах
             </a>
           </div>
         </div>

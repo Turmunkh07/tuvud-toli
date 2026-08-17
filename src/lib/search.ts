@@ -120,6 +120,58 @@ export async function searchWords(
   };
 }
 
+export type LetterResults = {
+  letter: string;
+  items: WordResult[];
+  page: number;
+  pageCount: number;
+  total: number;
+};
+
+/**
+ * Every word filed under one root letter, in Tibetan dictionary order.
+ *
+ * Deliberately not a starts-with search on the letter: `བཀྲ་ཤིས་` is filed
+ * under ཀ but written starting with བ, so matching the first character would
+ * both miss it here and wrongly list it under བ.
+ */
+export async function listWordsByRootLetter(
+  letter: string,
+  requestedPage = 1,
+): Promise<LetterResults> {
+  const [countRow] = await db
+    .select({ value: count() })
+    .from(words)
+    .where(eq(words.rootLetter, letter));
+
+  const total = countRow?.value ?? 0;
+  const pageCount = Math.ceil(total / PAGE_SIZE);
+  const page = pageCount === 0 ? 1 : Math.min(requestedPage, pageCount);
+
+  if (total === 0) return { letter, items: [], page: 1, pageCount: 0, total };
+
+  const pageRows = await db
+    .select({ id: words.id, termTibetan: words.termTibetan })
+    .from(words)
+    .where(eq(words.rootLetter, letter))
+    .orderBy(words.sortKey)
+    .limit(PAGE_SIZE)
+    .offset((page - 1) * PAGE_SIZE);
+
+  const previews = await buildPreviews(
+    pageRows.map((row) => row.id),
+    "",
+  );
+
+  return {
+    letter,
+    items: pageRows.map((row) => ({ ...row, preview: previews.get(row.id) ?? null })),
+    page,
+    pageCount,
+    total,
+  };
+}
+
 /**
  * Picks one definition per word to show under the headword. When the hit came
  * from definition text, showing meaning 1 would look like a non-match, so the

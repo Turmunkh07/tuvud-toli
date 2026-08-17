@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { verifySession } from "@/lib/dal";
 import { listSources } from "@/lib/sources";
 import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
@@ -67,9 +68,12 @@ export default async function AdminSourcesPage({
                       className={inputClass}
                     />
                   </label>
-                  <span className="pb-1.5 text-xs text-muted-foreground">
+                  <Link
+                    href={`/admin/sources/${source.id}`}
+                    className="pb-1.5 text-xs text-primary hover:underline"
+                  >
                     {source.definitionCount} тодорхойлолт
-                  </span>
+                  </Link>
                   <button
                     type="submit"
                     className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-dark"
