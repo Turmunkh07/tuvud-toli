@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { Dictionary } from "@/dictionaries/mn";
 
 export type DefinitionRow = {
   source: string;
@@ -24,6 +25,7 @@ export function WordForm({
   initialDefinitions = [],
   existingSources = [],
   submitLabel,
+  t,
 }: {
   action: (formData: FormData) => void | Promise<void>;
   initialTerm?: string;
@@ -32,6 +34,7 @@ export function WordForm({
    * collaborator reuses an existing book instead of retyping its name. */
   existingSources?: string[];
   submitLabel: string;
+  t: Dictionary["wordForm"];
 }) {
   const [rows, setRows] = useState(() =>
     (initialDefinitions.length > 0
@@ -74,7 +77,7 @@ export function WordForm({
       </datalist>
 
       <label className="flex flex-col gap-1 text-sm text-foreground">
-        Төвөд үг
+        {t.tibetanWord}
         <input
           type="text"
           name="termTibetan"
@@ -86,7 +89,9 @@ export function WordForm({
       </label>
 
       <section>
-        <h2 className="text-sm font-medium uppercase tracking-wide text-brown">Тодорхойлолтууд</h2>
+        <h2 className="text-sm font-medium uppercase tracking-wide text-brown">
+          {t.definitionsHeading}
+        </h2>
 
         <div className="mt-3 flex flex-col gap-4">
           {rows.map((row, index) => (
@@ -97,7 +102,7 @@ export function WordForm({
                   {(row.createdBy || row.sourceFile) && (
                     <span className="ml-2 font-sans text-xs font-normal text-muted-foreground">
                       {row.createdBy}
-                      {row.sourceFile ? ` · ${row.sourceFile}` : " · гараар"}
+                      {row.sourceFile ? ` · ${row.sourceFile}` : t.manualSuffix}
                     </span>
                   )}
                 </span>
@@ -105,15 +110,15 @@ export function WordForm({
                   <button
                     type="button"
                     onClick={() => removeRow(row.key)}
-                    className="text-xs text-red-700 hover:underline"
+                    className="text-xs text-danger hover:underline"
                   >
-                    Хасах
+                    {t.remove}
                   </button>
                 )}
               </div>
 
               <label className="mt-2 flex flex-col gap-1 text-sm text-foreground">
-                Эх сурвалж
+                {t.sourceLabel}
                 <input
                   type="text"
                   name="source"
@@ -125,7 +130,7 @@ export function WordForm({
               </label>
 
               <label className="mt-3 flex flex-col gap-1 text-sm text-foreground">
-                Тодорхойлолт
+                {t.definitionLabel}
                 <textarea
                   name="definitionText"
                   defaultValue={row.definitionText}
@@ -143,13 +148,13 @@ export function WordForm({
           onClick={addRow}
           className="mt-4 rounded-md border border-primary px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary-light/10"
         >
-          + Тодорхойлолт нэмэх
+          {t.addDefinition}
         </button>
       </section>
 
       <button
         type="submit"
-        className="self-start rounded-md bg-primary px-5 py-2 font-medium text-white hover:bg-primary-dark"
+        className="self-start rounded-md bg-primary px-5 py-2 font-medium text-on-primary hover:bg-primary-dark"
       >
         {submitLabel}
       </button>

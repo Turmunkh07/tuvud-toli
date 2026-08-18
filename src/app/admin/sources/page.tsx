@@ -1,8 +1,10 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { verifySession } from "@/lib/dal";
 import { listSources } from "@/lib/sources";
 import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
 import { AdminPageShell } from "@/components/AdminPageShell";
+import { getDictionary } from "@/lib/i18n";
 import {
   renameSourceAction,
   mergeSourcesIntoAction,
@@ -12,23 +14,29 @@ import {
 const inputClass =
   "rounded-md border border-border bg-surface px-3 py-1.5 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary-light";
 
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getDictionary();
+  return { title: t.admin.sources.metaTitle };
+}
+
 export default async function AdminSourcesPage({
   searchParams,
 }: {
   searchParams: Promise<{ notice?: string; error?: string }>;
 }) {
   await verifySession();
-  const [{ notice, error }, allSources] = await Promise.all([searchParams, listSources()]);
+  const [{ notice, error }, allSources, t] = await Promise.all([
+    searchParams,
+    listSources(),
+    getDictionary(),
+  ]);
+  const s = t.admin.sources;
 
   return (
     <AdminPageShell>
       <div>
-        <h1 className="font-serif text-2xl font-semibold text-foreground">Эх сурвалжууд</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Импорт болон гараар нэмэхэд бүх тодорхойлолт эндээс жагсаасан эх сурвалж руу холбогддог.
-          Ижил нэрээр импортолсон бол автоматаар нэг сурвалж болж нэгддэг; өөр бичлэгээр орсон бол
-          доор гараар нэрийг нь засаж эсвэл нэгтгэж болно.
-        </p>
+        <h1 className="font-serif text-2xl font-semibold text-foreground">{s.title}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{s.description}</p>
       </div>
 
       {notice && (
@@ -37,17 +45,17 @@ export default async function AdminSourcesPage({
         </p>
       )}
       {error && (
-        <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p className="rounded-md border border-danger-border bg-danger-surface px-3 py-2 text-sm text-danger">
           {error}
         </p>
       )}
 
       {allSources.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Одоогоор эх сурвалж алга.</p>
+        <p className="text-sm text-muted-foreground">{s.empty}</p>
       ) : (
         <ul className="flex flex-col gap-4">
           {allSources.map((source) => {
-            const otherSources = allSources.filter((s) => s.id !== source.id);
+            const otherSources = allSources.filter((other) => other.id !== source.id);
             const boundRename = renameSourceAction.bind(null, source.id);
             const boundMerge = mergeSourcesIntoAction.bind(null, source.id);
             const boundDelete = deleteSourceAction.bind(null, source.id);
@@ -59,7 +67,7 @@ export default async function AdminSourcesPage({
               >
                 <form action={boundRename} className="flex flex-wrap items-end gap-2">
                   <label className="flex flex-1 flex-col gap-1 text-xs text-muted-foreground">
-                    Нэр
+                    {s.nameLabel}
                     <input
                       type="text"
                       name="title"
@@ -72,13 +80,13 @@ export default async function AdminSourcesPage({
                     href={`/admin/sources/${source.id}`}
                     className="pb-1.5 text-xs text-primary hover:underline"
                   >
-                    {source.definitionCount} тодорхойлолт
+                    {s.defCount(source.definitionCount)}
                   </Link>
                   <button
                     type="submit"
-                    className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-dark"
+                    className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-on-primary hover:bg-primary-dark"
                   >
-                    Хадгалах
+                    {s.save}
                   </button>
                 </form>
 
@@ -86,9 +94,9 @@ export default async function AdminSourcesPage({
                   {otherSources.length > 0 && (
                     <form action={boundMerge} className="flex flex-1 items-end gap-2">
                       <label className="flex flex-1 flex-col gap-1 text-xs text-muted-foreground">
-                        Үүн рүү нэгтгэх
+                        {s.mergeInto}
                         <select name="targetSourceId" required className={inputClass}>
-                          <option value="">— сонгох —</option>
+                          <option value="">{s.chooseOption}</option>
                           {otherSources.map((other) => (
                             <option key={other.id} value={other.id}>
                               {other.title} ({other.definitionCount})
@@ -97,10 +105,10 @@ export default async function AdminSourcesPage({
                         </select>
                       </label>
                       <ConfirmSubmitButton
-                        confirmMessage={`"${source.title}"-г сонгосон сурвалж руу нэгтгэх үү? Энэ сурвалж устана.`}
+                        confirmMessage={s.mergeConfirm(source.title)}
                         className="rounded-md border border-border px-3 py-1.5 text-xs text-foreground hover:border-primary hover:text-primary"
                       >
-                        Нэгтгэх
+                        {s.merge}
                       </ConfirmSubmitButton>
                     </form>
                   )}
@@ -108,10 +116,10 @@ export default async function AdminSourcesPage({
                   {source.definitionCount === 0 && (
                     <form action={boundDelete}>
                       <ConfirmSubmitButton
-                        confirmMessage={`Ашиглагдаагүй "${source.title}"-г устгах уу?`}
-                        className="text-xs text-red-700 hover:underline"
+                        confirmMessage={s.deleteConfirm(source.title)}
+                        className="text-xs text-danger hover:underline"
                       >
-                        Устгах
+                        {s.delete}
                       </ConfirmSubmitButton>
                     </form>
                   )}

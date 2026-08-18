@@ -1,40 +1,44 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { verifySession } from "@/lib/dal";
 import { listRevisions } from "@/lib/revisions";
 import { AdminPageShell } from "@/components/AdminPageShell";
 import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
 import { restoreRevisionAction } from "@/app/admin/actions";
+import { getDictionary } from "@/lib/i18n";
 
-const ACTION_LABEL: Record<string, string> = {
-  update: "засварлахын өмнөх",
-  delete: "устгахын өмнөх",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getDictionary();
+  return { title: t.admin.history.metaTitle };
+}
 
 export default async function AdminHistoryPage({
   searchParams,
 }: {
   searchParams: Promise<{ notice?: string; error?: string }>;
 }) {
-  const [, { notice, error }, revisions] = await Promise.all([
+  const [, { notice, error }, revisions, t] = await Promise.all([
     verifySession(),
     searchParams,
     listRevisions(),
+    getDictionary(),
   ]);
+  const h = t.admin.history;
+  const actionLabel: Record<string, string> = {
+    update: h.actionUpdate,
+    delete: h.actionDelete,
+  };
 
   return (
     <AdminPageShell>
       <div>
-        <h1 className="font-serif text-2xl font-semibold text-foreground">Өөрчлөлтийн түүх</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Excel-ээс оруулсан үгийг засах, устгахын өмнөх хувилбарыг аль файлаас гаралтайг нь
-          хамт хадгалав. Устгасан ч эх Excel файл өөрөө хэвээрээ — зөвхөн мэдээллийн сангийн
-          бичлэг арилна. Гараар нэмсэн үг архивлагдахгүй, шууд устана.
-        </p>
+        <h1 className="font-serif text-2xl font-semibold text-foreground">{h.title}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{h.description}</p>
         <p className="mt-2 text-sm text-muted-foreground">
           <Link href="/admin/imports" className="text-primary hover:underline">
-            Импортын түүх
+            {h.seeImportsLink}
           </Link>{" "}
-          хуудсаас тухайн файлыг хэн, хэзээ оруулсныг харна уу.
+          {h.seeImportsSuffix}
         </p>
       </div>
 
@@ -44,13 +48,13 @@ export default async function AdminHistoryPage({
         </p>
       )}
       {error && (
-        <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p className="rounded-md border border-danger-border bg-danger-surface px-3 py-2 text-sm text-danger">
           {error}
         </p>
       )}
 
       {revisions.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Одоогоор өөрчлөлт алга.</p>
+        <p className="text-sm text-muted-foreground">{h.empty}</p>
       ) : (
         <ul className="flex flex-col divide-y divide-border rounded-md border border-border bg-surface">
           {revisions.map((revision) => {
@@ -75,21 +79,21 @@ export default async function AdminHistoryPage({
                     {revision.termTibetan}
                   </Link>
                   <p className="text-xs text-muted-foreground">
-                    {revision.actor} · {ACTION_LABEL[revision.action] ?? revision.action} ·{" "}
-                    {definitionCount} тодорхойлолт · {revision.createdAt}
+                    {revision.actor} · {actionLabel[revision.action] ?? revision.action} ·{" "}
+                    {h.defCount(definitionCount)} · {revision.createdAt}
                   </p>
                   {revision.sourceFiles && (
                     <p className="mt-0.5 break-all text-xs text-brown">
-                      Файл: {revision.sourceFiles}
+                      {h.fileLabel(revision.sourceFiles)}
                     </p>
                   )}
                 </div>
                 <form action={restore}>
                   <ConfirmSubmitButton
-                    confirmMessage={`"${revision.termTibetan}"-г энэ хувилбар руу сэргээх үү?`}
+                    confirmMessage={h.restoreConfirm(revision.termTibetan)}
                     className="rounded-md border border-primary px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary-light/10"
                   >
-                    Сэргээх
+                    {h.restore}
                   </ConfirmSubmitButton>
                 </form>
               </li>

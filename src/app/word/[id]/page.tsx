@@ -1,9 +1,12 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { after } from "next/server";
 import { getWordById } from "@/lib/words";
 import { recordWordView } from "@/lib/views";
 import { CopyCitation } from "@/components/CopyCitation";
+import { RecordRecentView } from "@/components/RecordRecentView";
+import { getDictionary } from "@/lib/i18n";
 
 type Definition = {
   id: number;
@@ -27,6 +30,27 @@ function groupBySource(definitions: Definition[]) {
   return Array.from(groups, ([source, entries]) => ({ source, entries }));
 }
 
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const wordId = Number(id);
+  const [word, t] = await Promise.all([
+    Number.isInteger(wordId) ? getWordById(wordId) : Promise.resolve(null),
+    getDictionary(),
+  ]);
+  if (!word) return { title: t.notFoundPage.metaTitle };
+
+  const first = word.definitions[0]?.definitionText;
+
+  return {
+    title: word.termTibetan,
+    description: first ? `${word.termTibetan} — ${first}` : undefined,
+  };
+}
+
 export default async function WordPage({
   params,
 }: {
@@ -36,7 +60,7 @@ export default async function WordPage({
   const wordId = Number(id);
   if (!Number.isInteger(wordId)) notFound();
 
-  const word = await getWordById(wordId);
+  const [word, t] = await Promise.all([getWordById(wordId), getDictionary()]);
   if (!word) notFound();
 
   // Counted after the response is sent, so a reader never waits on a write
@@ -47,21 +71,31 @@ export default async function WordPage({
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col px-6 py-16">
-      <Link href="/" className="text-sm text-muted-foreground hover:text-primary">
-        ← Хайлт руу буцах
-      </Link>
+      <RecordRecentView id={word.id} termTibetan={word.termTibetan} />
+
+      <div className="flex items-baseline justify-between gap-4">
+        <Link href="/" className="text-sm text-muted-foreground hover:text-primary">
+          {t.word.backToSearch}
+        </Link>
+        <Link
+          href="/word/random"
+          className="text-sm text-muted-foreground hover:text-primary"
+        >
+          {t.word.randomWord}
+        </Link>
+      </div>
 
       <header className="mt-6 border-b border-border pb-6">
         <h1 className="tibetan text-4xl font-semibold text-foreground">{word.termTibetan}</h1>
         {grouped.length > 0 && (
           <p className="mt-2 text-sm text-muted-foreground">
-            {grouped.length} эх сурвалж · {word.definitions.length} тодорхойлолт
+            {t.word.sourceDefCounts(grouped.length, word.definitions.length)}
           </p>
         )}
       </header>
 
       {grouped.length === 0 ? (
-        <p className="mt-8 text-muted-foreground">Тодорхойлолт алга.</p>
+        <p className="mt-8 text-muted-foreground">{t.word.noDefinitions}</p>
       ) : (
         <div className="mt-8 flex flex-col gap-8">
           {grouped.map(({ source, entries }) => (
@@ -81,7 +115,7 @@ export default async function WordPage({
 
               {/* One citation per work: `s.v.` cites the entry, not a sense. */}
               <div className="pl-4">
-                <CopyCitation term={word.termTibetan} source={source} wordId={word.id} />
+                <CopyCitation term={word.termTibetan} source={source} wordId={word.id} t={t.citation} />
               </div>
             </section>
           ))}

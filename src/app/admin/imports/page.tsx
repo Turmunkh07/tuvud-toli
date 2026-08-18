@@ -1,24 +1,34 @@
+import type { Metadata } from "next";
 import { verifySession } from "@/lib/dal";
 import { listImportHistory, IMPORT_HISTORY_LIMIT } from "@/lib/imports";
 import { AdminPageShell } from "@/components/AdminPageShell";
+import { getDictionary } from "@/lib/i18n";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getDictionary();
+  return { title: t.admin.imports.metaTitle };
+}
 
 export default async function AdminImportsPage() {
   // Proxy has already rejected unauthenticated requests to /admin/* before a
   // page renders, so the session check and the query can overlap rather than
   // paying two sequential round trips.
-  const [, history] = await Promise.all([verifySession(), listImportHistory()]);
+  const [, history, t] = await Promise.all([
+    verifySession(),
+    listImportHistory(),
+    getDictionary(),
+  ]);
+  const im = t.admin.imports;
 
   return (
     <AdminPageShell>
       <div>
-        <h1 className="font-serif text-2xl font-semibold text-foreground">Импортын түүх</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Excel-ээс оруулсан файл бүр, хэн, хэзээ оруулснаар нь жагсаав.
-        </p>
+        <h1 className="font-serif text-2xl font-semibold text-foreground">{im.title}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{im.description}</p>
       </div>
 
       {history.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Одоогоор import хийгдээгүй байна.</p>
+        <p className="text-sm text-muted-foreground">{im.empty}</p>
       ) : (
         <div>
           <ul className="flex flex-col divide-y divide-border rounded-md border border-border bg-surface">
@@ -38,7 +48,7 @@ export default async function AdminImportsPage() {
 
           {history.length === IMPORT_HISTORY_LIMIT && (
             <p className="mt-2 text-xs text-muted-foreground">
-              Хамгийн сүүлийн {IMPORT_HISTORY_LIMIT} импортыг харуулав.
+              {im.limitNote(IMPORT_HISTORY_LIMIT)}
             </p>
           )}
         </div>

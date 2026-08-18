@@ -4,6 +4,9 @@ import { getLandingData, TIBETAN_LETTERS } from "@/lib/stats";
 import { getPopularWords } from "@/lib/views";
 import { SearchResults } from "@/components/SearchResults";
 import { WordList } from "@/components/WordList";
+import { SearchBox } from "@/components/SearchBox";
+import { RecentlyViewed } from "@/components/RecentlyViewed";
+import { getDictionary, getLocale, formatNumber } from "@/lib/i18n";
 
 export default async function Home({
   searchParams,
@@ -17,7 +20,9 @@ export default async function Home({
   const browseLetter =
     letter && (TIBETAN_LETTERS as readonly string[]).includes(letter) ? letter : null;
 
-  const [results, browse, landing] = await Promise.all([
+  const [t, locale, results, browse, landing] = await Promise.all([
+    getDictionary(),
+    getLocale(),
     query ? searchWords(query, parseTab(tab), parsePage(page)) : Promise.resolve(null),
     !query && browseLetter
       ? listWordsByRootLetter(browseLetter, parsePage(page))
@@ -29,30 +34,32 @@ export default async function Home({
   // enough times for the ranking to say anything — see lib/views.ts.
   const popular = landing ? await getPopularWords() : null;
   const featured = popular?.ready
-    ? { title: "Хамгийн их хайсан", words: popular.words }
-    : { title: "Сүүлд нэмэгдсэн", words: landing?.recentWords ?? [] };
+    ? { title: t.home.mostSearched, words: popular.words }
+    : { title: t.home.recentlyAdded, words: landing?.recentWords ?? [] };
 
   return (
     <main className="flex flex-1 flex-col items-center px-6 py-16">
       <div className="w-full max-w-2xl text-center">
         <h1 className="font-serif text-4xl font-semibold tracking-tight text-foreground">
-          Төвөд-Монгол толь
+          {t.home.title}
         </h1>
-        <p className="mt-3 text-muted-foreground">
-           Төвөд-монгол толь бичиг
-        </p>
+        <Link
+          href="/word/random"
+          className="mt-4 inline-flex items-center gap-2 rounded-md border border-primary px-4 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary-light/10"
+        >
+          {t.home.randomWordCta}
+        </Link>
       </div>
 
-      <form action="/" className="mt-8 w-full max-w-xl">
-        <input
-          type="search"
-          name="q"
-          defaultValue={query}
-          placeholder="Төвөд үг хайх..."
-          autoFocus
-          className="tibetan w-full rounded-md border border-border bg-surface px-5 py-3 text-lg text-foreground placeholder:font-serif placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary-light"
-        />
-      </form>
+      <SearchBox
+        action="/"
+        wordHrefPrefix="/word"
+        defaultValue={query}
+        placeholder={t.home.searchPlaceholder}
+        autoFocus
+        className="mt-8 w-full max-w-xl"
+        inputClassName="tibetan w-full rounded-md border border-border bg-surface px-5 py-3 text-lg text-foreground placeholder:font-serif placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary-light"
+      />
 
       {results && (
         <div className="mt-10 w-full max-w-xl">
@@ -61,6 +68,7 @@ export default async function Home({
             results={results}
             basePath="/"
             wordHrefPrefix="/word"
+            t={t.searchResults}
           />
         </div>
       )}
@@ -69,15 +77,15 @@ export default async function Home({
         <div className="mt-10 w-full max-w-xl">
           <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-border pb-2">
             <h2 className="text-sm font-medium uppercase tracking-wide text-brown">
-              <span className="tibetan text-lg">{browse.letter}</span> үндсэн үсэгтэй үг
+              <span className="tibetan text-lg">{browse.letter}</span> {t.home.letterHeadingSuffix}
             </h2>
             <Link href="/" className="text-sm text-muted-foreground hover:text-primary">
-              ← Бүх үсэг
+              {t.home.allLetters}
             </Link>
           </div>
 
           {browse.total === 0 ? (
-            <p className="mt-4 text-sm text-muted-foreground">Энэ үсэгт үг алга.</p>
+            <p className="mt-4 text-sm text-muted-foreground">{t.home.noWordsForLetter}</p>
           ) : (
             <>
               <div className="mt-4">
@@ -85,8 +93,11 @@ export default async function Home({
               </div>
               <div className="mt-3 flex items-center justify-between gap-4 text-sm">
                 <p className="text-muted-foreground">
-                  {(browse.page - 1) * 20 + 1}–{Math.min(browse.page * 20, browse.total)} /{" "}
-                  {browse.total}
+                  {t.home.rangeOfTotal(
+                    (browse.page - 1) * 20 + 1,
+                    Math.min(browse.page * 20, browse.total),
+                    browse.total,
+                  )}
                 </p>
                 {browse.pageCount > 1 && (
                   <div className="flex items-center gap-2">
@@ -95,23 +106,23 @@ export default async function Home({
                         href={`/?letter=${encodeURIComponent(browse.letter)}&page=${browse.page - 1}`}
                         className="rounded-md border border-border px-2 py-1 hover:border-primary hover:text-primary"
                       >
-                        ← Өмнөх
+                        {t.home.prev}
                       </Link>
                     ) : (
-                      <span className="px-2 py-1 text-muted-foreground/40">← Өмнөх</span>
+                      <span className="px-2 py-1 text-muted-foreground/40">{t.home.prev}</span>
                     )}
                     <span className="text-muted-foreground">
-                      {browse.page} / {browse.pageCount}
+                      {t.home.pageOf(browse.page, browse.pageCount)}
                     </span>
                     {browse.page < browse.pageCount ? (
                       <Link
                         href={`/?letter=${encodeURIComponent(browse.letter)}&page=${browse.page + 1}`}
                         className="rounded-md border border-border px-2 py-1 hover:border-primary hover:text-primary"
                       >
-                        Дараах →
+                        {t.home.next}
                       </Link>
                     ) : (
-                      <span className="px-2 py-1 text-muted-foreground/40">Дараах →</span>
+                      <span className="px-2 py-1 text-muted-foreground/40">{t.home.next}</span>
                     )}
                   </div>
                 )}
@@ -124,21 +135,16 @@ export default async function Home({
       {landing && (
         <div className="mt-6 w-full max-w-xl">
           <p className="text-center text-sm text-muted-foreground">
-            <span className="font-medium text-brown">{landing.wordCount.toLocaleString("mn-MN")}</span>{" "}
-            үг ·{" "}
-            <span className="font-medium text-brown">
-              {landing.sourceCount.toLocaleString("mn-MN")}
-            </span>{" "}
-            эх сурвалж ·{" "}
-            <span className="font-medium text-brown">
-              {landing.definitionCount.toLocaleString("mn-MN")}
-            </span>{" "}
-            тодорхойлолт
+            {t.home.stats(
+              formatNumber(landing.wordCount, locale),
+              formatNumber(landing.sourceCount, locale),
+              formatNumber(landing.definitionCount, locale),
+            )}
           </p>
 
           <section className="mt-10">
             <h2 className="text-xs font-medium uppercase tracking-wide text-brown">
-              Цагаан толгойгоор үзэх
+              {t.home.browseByLetter}
             </h2>
             <div className="mt-3 flex flex-wrap gap-1.5">
               {TIBETAN_LETTERS.map((letter) =>
@@ -154,7 +160,7 @@ export default async function Home({
                   <span
                     key={letter}
                     aria-disabled="true"
-                    title="Одоогоор үг алга"
+                    title={t.home.noWordYet}
                     className="tibetan flex h-10 w-10 items-center justify-center rounded-md border border-transparent text-lg leading-none text-muted-foreground/30"
                   >
                     {letter}
@@ -183,6 +189,8 @@ export default async function Home({
               </ul>
             </section>
           )}
+
+          <RecentlyViewed t={t.recentlyViewed} />
         </div>
       )}
     </main>

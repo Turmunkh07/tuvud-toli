@@ -2,12 +2,14 @@ import Link from "next/link";
 import { verifySession } from "@/lib/dal";
 import { searchWords, parseTab, parsePage } from "@/lib/search";
 import { SearchResults } from "@/components/SearchResults";
+import { SearchBox } from "@/components/SearchBox";
 import { ConfirmSubmitButton } from "@/components/ConfirmSubmitButton";
 import { listCollaborators } from "@/lib/collaborators";
 import { canManageCollaborators } from "@/lib/owners";
 import { countOpenConflicts } from "@/lib/conflicts";
 import { getAdminStats } from "@/lib/stats";
 import { CleanFlashUrl } from "@/components/CleanFlashUrl";
+import { getDictionary, getLocale, formatNumber } from "@/lib/i18n";
 import {
   logoutAction,
   importWorkbookAction,
@@ -30,24 +32,28 @@ export default async function AdminDashboardPage({
   const canManage = canManageCollaborators(session);
   const { q, tab, page, notice, error } = await searchParams;
   const query = (q ?? "").trim();
-  const [results, collaborators, conflictCount, stats] = await Promise.all([
+  const [t, locale, results, collaborators, conflictCount, stats] = await Promise.all([
+    getDictionary(),
+    getLocale(),
     query ? searchWords(query, parseTab(tab), parsePage(page)) : Promise.resolve(null),
     listCollaborators(),
     countOpenConflicts(),
     getAdminStats(),
   ]);
 
+  const dash = t.admin.dashboard;
+
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-10 px-6 py-12">
+    <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-10 px-6 pb-12 pt-16">
       <CleanFlashUrl />
       <header className="flex items-center justify-between border-b border-border pb-4">
         <div>
-          <h1 className="font-serif text-2xl font-semibold text-foreground">Хяналтын самбар</h1>
-          <p className="text-sm text-muted-foreground">Нэвтэрсэн: {session.name}</p>
+          <h1 className="font-serif text-2xl font-semibold text-foreground">{dash.heading}</h1>
+          <p className="text-sm text-muted-foreground">{dash.loggedInAs(session.name)}</p>
         </div>
         <form action={logoutAction}>
           <button type="submit" className="text-sm text-muted-foreground hover:text-primary">
-            Гарах
+            {dash.logout}
           </button>
         </form>
       </header>
@@ -58,24 +64,24 @@ export default async function AdminDashboardPage({
         </p>
       )}
       {error && (
-        <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <p className="rounded-md border border-danger-border bg-danger-surface px-3 py-2 text-sm text-danger">
           {error}
         </p>
       )}
 
       <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
-          { label: "Нийт үгсийн тоо", value: stats.wordCount },
-          { label: "Эх сурвалжийн тоо", value: stats.sourceCount },
-          { label: "Хамтран ажиллагч", value: collaborators.length },
-          { label: "Импортын тоо", value: stats.importCount },
+          { label: dash.statWordCount, value: stats.wordCount },
+          { label: dash.statSourceCount, value: stats.sourceCount },
+          { label: dash.statCollaborators, value: collaborators.length },
+          { label: dash.statImports, value: stats.importCount },
         ].map((stat) => (
           <div
             key={stat.label}
             className="rounded-md border border-border bg-surface px-3 py-2"
           >
             <p className="font-serif text-2xl font-semibold text-brown">
-              {stat.value.toLocaleString("mn-MN")}
+              {formatNumber(stat.value, locale)}
             </p>
             <p className="text-xs text-muted-foreground">{stat.label}</p>
           </div>
@@ -83,59 +89,53 @@ export default async function AdminDashboardPage({
       </section>
 
       <section className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <form action="/admin" className="flex flex-1 gap-2">
-          <input
-            type="search"
-            name="q"
-            defaultValue={query}
-            placeholder="Төвөд үг хайх..."
-            className="tibetan flex-1 rounded-md border border-border bg-surface px-4 py-2 text-lg text-foreground placeholder:font-serif placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary-light"
-          />
-          <button
-            type="submit"
-            className="rounded-md bg-primary px-4 py-2 font-medium text-white hover:bg-primary-dark"
-          >
-            Хайх
-          </button>
-        </form>
+        <SearchBox
+          action="/admin"
+          wordHrefPrefix="/admin/words"
+          defaultValue={query}
+          placeholder={t.home.searchPlaceholder}
+          submitLabel={dash.searchSubmit}
+          className="flex-1"
+          inputClassName="tibetan w-full rounded-md border border-border bg-surface px-4 py-2 text-lg text-foreground placeholder:font-serif placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary-light"
+        />
         <Link
           href="/admin/words/new"
           className="rounded-md border border-primary px-4 py-2 text-center font-medium text-primary hover:bg-primary-light/10"
         >
-          + Үг нэмэх
+          {dash.addWord}
         </Link>
       </section>
 
       <section>
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-sm font-medium uppercase tracking-wide text-brown">
-            Excel-ээс олноор нь оруулах
+            {dash.bulkImportHeading}
           </h2>
           <div className="flex gap-3">
             <Link href="/admin/sources" className="text-sm text-primary hover:underline">
-              Эх сурвалжууд
+              {dash.sourcesLink}
             </Link>
             <Link href="/admin/imports" className="text-sm text-primary hover:underline">
-              Импортын түүх
+              {dash.importsLink}
             </Link>
             <Link href="/admin/history" className="text-sm text-primary hover:underline">
-              Түүх
+              {dash.historyLink}
             </Link>
             <Link
               href="/admin/conflicts"
               className={
                 conflictCount > 0
-                  ? "text-sm font-medium text-red-700 hover:underline"
+                  ? "text-sm font-medium text-danger hover:underline"
                   : "text-sm text-primary hover:underline"
               }
             >
-              Зөрчил{conflictCount > 0 ? ` (${conflictCount})` : ""}
+              {dash.conflictsLink(conflictCount)}
             </Link>
             <a href="/admin/template" className="text-sm text-primary hover:underline" download>
-              ↓ Загвар
+              {dash.templateDownload}
             </a>
             <a href="/admin/export" className="text-sm text-primary hover:underline" download>
-              ↓ Бүгдийг татах
+              {dash.exportDownload}
             </a>
           </div>
         </div>
@@ -145,27 +145,27 @@ export default async function AdminDashboardPage({
             name="file"
             accept=".xlsx"
             required
-            className="flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-primary file:px-3 file:py-1 file:text-white"
+            className="flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm file:mr-3 file:rounded file:border-0 file:bg-primary file:px-3 file:py-1 file:text-on-primary"
           />
           <button
             type="submit"
-            className="rounded-md bg-primary px-4 py-2 font-medium text-white hover:bg-primary-dark"
+            className="rounded-md bg-primary px-4 py-2 font-medium text-on-primary hover:bg-primary-dark"
           >
-            Оруулах
+            {dash.importSubmit}
           </button>
         </form>
       </section>
 
       <section>
         <h2 className="text-sm font-medium uppercase tracking-wide text-brown">
-          Хамтран ажиллагчид
+          {dash.collaboratorsHeading}
         </h2>
         <form
           action={inviteCollaboratorAction}
           className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end"
         >
           <label className="flex flex-1 flex-col gap-1 text-sm text-foreground">
-            Нэр
+            {dash.nameField}
             <input
               type="text"
               name="collaboratorName"
@@ -174,7 +174,7 @@ export default async function AdminDashboardPage({
             />
           </label>
           <label className="flex flex-1 flex-col gap-1 text-sm text-foreground">
-            Имэйл
+            {dash.emailField}
             <input
               type="email"
               name="email"
@@ -184,9 +184,9 @@ export default async function AdminDashboardPage({
           </label>
           <button
             type="submit"
-            className="rounded-md bg-primary px-4 py-2 font-medium text-white hover:bg-primary-dark"
+            className="rounded-md bg-primary px-4 py-2 font-medium text-on-primary hover:bg-primary-dark"
           >
-            Урих
+            {dash.inviteSubmit}
           </button>
         </form>
 
@@ -202,14 +202,14 @@ export default async function AdminDashboardPage({
                   <span className="text-muted-foreground">{collaborator.email}</span>
                 </span>
                 <span className="flex items-center gap-3 text-xs text-muted-foreground">
-                  {collaborator.lastLoginAt ? "Нэвтэрсэн" : "Хараахан нэвтрээгүй"}
+                  {collaborator.lastLoginAt ? dash.loggedIn : dash.neverLoggedIn}
                   {canManage && (
                     <form action={removeCollaboratorAction.bind(null, collaborator.id)}>
                       <ConfirmSubmitButton
-                        confirmMessage={`${collaborator.email}-г хасах уу?`}
-                        className="text-red-700 hover:underline"
+                        confirmMessage={dash.removeConfirm(collaborator.email)}
+                        className="text-danger hover:underline"
                       >
-                        Хасах
+                        {dash.remove}
                       </ConfirmSubmitButton>
                     </form>
                   )}
@@ -227,6 +227,7 @@ export default async function AdminDashboardPage({
             results={results}
             basePath="/admin"
             wordHrefPrefix="/admin/words"
+            t={t.searchResults}
           />
         </section>
       )}

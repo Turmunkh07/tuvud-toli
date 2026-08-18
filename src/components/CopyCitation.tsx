@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { Dictionary } from "@/dictionaries/mn";
 
 function ClipboardIcon({ checked }: { checked: boolean }) {
   return (
@@ -47,10 +48,12 @@ export function CopyCitation({
   term,
   source,
   wordId,
+  t,
 }: {
   term: string;
   source: string;
   wordId: number;
+  t: Dictionary["citation"];
 }) {
   const [copied, setCopied] = useState<"mn" | "en" | null>(null);
 
@@ -86,20 +89,20 @@ export function CopyCitation({
       <button
         type="button"
         onClick={() => copy("mn")}
-        aria-label={`${term} — эшлэлийг монголоор хуулах`}
+        aria-label={t.ariaMn(term)}
         className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-primary"
       >
         <ClipboardIcon checked={copied === "mn"} />
-        {copied === "mn" ? "Хуулагдлаа" : "Эшлэл хуулах"}
+        {copied === "mn" ? t.copiedMn : t.copyMn}
       </button>
       <button
         type="button"
         onClick={() => copy("en")}
-        aria-label={`${term} — copy citation in English`}
+        aria-label={t.ariaEn(term)}
         className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-primary"
       >
         <ClipboardIcon checked={copied === "en"} />
-        {copied === "en" ? "Copied" : "Cite in English"}
+        {copied === "en" ? t.copiedEn : t.copyEn}
       </button>
     </div>
   );

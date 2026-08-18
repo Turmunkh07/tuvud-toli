@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { WordList } from "@/components/WordList";
 import { PAGE_SIZE, type SearchResults as Results, type SearchTab } from "@/lib/search";
+import type { Dictionary } from "@/dictionaries/mn";
 
 /**
  * Tabs and pages are links rather than client state so that a result page is
@@ -12,6 +13,7 @@ export function SearchResults({
   results,
   basePath,
   wordHrefPrefix,
+  t,
 }: {
   query: string;
   results: Results;
@@ -19,6 +21,7 @@ export function SearchResults({
   basePath: string;
   /** Route each result links to, e.g. "/word" or "/admin/words". */
   wordHrefPrefix: string;
+  t: Dictionary["searchResults"];
 }) {
   const { tab, items, page, pageCount, total, startsWithCount, containsCount } = results;
 
@@ -37,20 +40,20 @@ export function SearchResults({
       <div className="flex border-b border-border">
         <TabLink
           href={hrefFor("startsWith", 1)}
-          label={`"${query}"-ээр эхэлдэг`}
+          label={t.startsWith(query)}
           count={startsWithCount}
           isActive={tab === "startsWith"}
         />
         <TabLink
           href={hrefFor("contains", 1)}
-          label={`"${query}" агуулсан`}
+          label={t.contains(query)}
           count={containsCount}
           isActive={tab === "contains"}
         />
       </div>
 
       {items.length === 0 ? (
-        <p className="mt-4 text-sm text-muted-foreground">Ийм үг олдсонгүй.</p>
+        <p className="mt-4 text-sm text-muted-foreground">{t.noneFound}</p>
       ) : (
         <>
           <div className="mt-4">
@@ -58,20 +61,16 @@ export function SearchResults({
           </div>
 
           <div className="mt-3 flex items-center justify-between gap-4 text-sm">
-            <p className="text-muted-foreground">
-              {firstOnPage}–{lastOnPage} / {total}
-            </p>
+            <p className="text-muted-foreground">{t.rangeOfTotal(firstOnPage, lastOnPage, total)}</p>
 
             {pageCount > 1 && (
               <div className="flex items-center gap-2">
                 <PageLink href={hrefFor(tab, page - 1)} disabled={page <= 1}>
-                  ← Өмнөх
+                  {t.prev}
                 </PageLink>
-                <span className="text-muted-foreground">
-                  {page} / {pageCount}
-                </span>
+                <span className="text-muted-foreground">{t.pageOf(page, pageCount)}</span>
                 <PageLink href={hrefFor(tab, page + 1)} disabled={page >= pageCount}>
-                  Дараах →
+                  {t.next}
                 </PageLink>
               </div>
             )}

@@ -12,9 +12,48 @@
   --color-brown: #5d4037;
   --color-border: #e2e5e3;
 
+  /* Text that sits on a primary-coloured fill. Flips in dark mode, where the
+     primary becomes light green and white would be unreadable on it. */
+  --color-on-primary: #ffffff;
+  --color-danger: #b91c1c;
+  --color-danger-surface: #fef2f2;
+  --color-danger-border: #fecaca;
+
   --font-serif: var(--font-source-serif);
   --font-sans: var(--font-inter);
   --font-tibetan: var(--font-noto-tibetan);
+
+  color-scheme: light;
+}
+
+/*
+  Dark palette. Every neutral carries a slight green cast rather than being
+  plain grey, so the #2E7D32 brand still reads as the same family at night.
+  The greens also swap roles: the mid green is too dark to sit on a dark
+  background, so the light green becomes the interactive colour and the soil
+  brown is lifted until it stays legible.
+
+  Deliberately NOT wired to `prefers-color-scheme`: the dictionary opens white
+  for everyone, and dark is only what the reader picks with the toggle.
+*/
+:root[data-theme="dark"] {
+  --background: #0f1411;
+  --surface: #161d18;
+  --foreground: #e8ece9;
+  --muted-foreground: #9aa5a0;
+
+  --color-primary: #81c784;
+  --color-primary-light: #a5d6a7;
+  --color-primary-dark: #4caf50;
+  --color-brown: #c9a99b;
+  --color-border: #26302a;
+
+  --color-on-primary: #0f1411;
+  --color-danger: #f7a6a0;
+  --color-danger-surface: #2a1714;
+  --color-danger-border: #4a2420;
+
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -28,6 +67,10 @@
   --color-primary-dark: var(--color-primary-dark);
   --color-brown: var(--color-brown);
   --color-border: var(--color-border);
+  --color-on-primary: var(--color-on-primary);
+  --color-danger: var(--color-danger);
+  --color-danger-surface: var(--color-danger-surface);
+  --color-danger-border: var(--color-danger-border);
 
   --font-serif: var(--font-serif);
   --font-sans: var(--font-sans);

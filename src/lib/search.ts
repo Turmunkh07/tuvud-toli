@@ -39,6 +39,37 @@ export function parsePage(value: string | undefined): number {
   return Number.isFinite(parsed) && parsed >= 1 ? Math.floor(parsed) : 1;
 }
 
+/**
+ * The two halves of a search, as conditions on `words` alone.
+ *
+ * The definition-text half is expressed with EXISTS rather than a join so it
+ * can be counted and paged without the duplicate rows a join would produce.
+ */
+function buildMatchers(query: string) {
+  const escaped = escapeLike(query);
+  const startsWithPattern = `${escaped}%`;
+  const containsPattern = `%${escaped}%`;
+  const loweredPattern = `%${escapeLike(normalizeForSearch(query))}%`;
+
+  return {
+    startsWithWhere: like(words.termTibetan, startsWithPattern),
+    containsWhere: or(
+      and(like(words.termTibetan, containsPattern), notLike(words.termTibetan, startsWithPattern)),
+      exists(
+        db
+          .select({ one: sql`1` })
+          .from(definitions)
+          .where(
+            and(
+              eq(definitions.wordId, words.id),
+              like(definitions.definitionTextLower, loweredPattern),
+            ),
+          ),
+      ),
+    ),
+  };
+}
+
 export async function searchWords(
   rawQuery: string,
   tab: SearchTab = "startsWith",
@@ -56,29 +87,7 @@ export async function searchWords(
   };
   if (!query) return empty;
 
-  const escaped = escapeLike(query);
-  const startsWithPattern = `${escaped}%`;
-  const containsPattern = `%${escaped}%`;
-  const loweredPattern = `%${escapeLike(normalizeForSearch(query))}%`;
-
-  const startsWithWhere = like(words.termTibetan, startsWithPattern);
-
-  // Expressed against `words` alone via EXISTS so it can be counted and paged
-  // without the duplicate rows a join against definitions would produce.
-  const containsWhere = or(
-    and(like(words.termTibetan, containsPattern), notLike(words.termTibetan, startsWithPattern)),
-    exists(
-      db
-        .select({ one: sql`1` })
-        .from(definitions)
-        .where(
-          and(
-            eq(definitions.wordId, words.id),
-            like(definitions.definitionTextLower, loweredPattern),
-          ),
-        ),
-    ),
-  );
+  const { startsWithWhere, containsWhere } = buildMatchers(query);
 
   const [startsWithRows, containsRows] = await Promise.all([
     db.select({ value: count() }).from(words).where(startsWithWhere),
@@ -118,6 +127,59 @@ export async function searchWords(
     pageCount,
     total,
   };
+}
+
+/** Headwords offered under the search field while typing. */
+export const SUGGEST_LIMIT = 8;
+
+/**
+ * A short, unpaged version of `searchWords` for the type-ahead list.
+ *
+ * Prefix matches come first and only fall back to contains-matches when they
+ * do not fill the list, so the obvious completion of what you are typing is
+ * never pushed below a word that merely mentions it.
+ */
+export async function suggestWords(
+  rawQuery: string,
+  limit = SUGGEST_LIMIT,
+): Promise<WordResult[]> {
+  const query = rawQuery.trim();
+  if (!query) return [];
+
+  const { startsWithWhere, containsWhere } = buildMatchers(query);
+
+  const startsWith = await db
+    .select({ id: words.id, termTibetan: words.termTibetan })
+    .from(words)
+    .where(startsWithWhere)
+    .orderBy(words.termTibetan)
+    .limit(limit);
+
+  const remaining = limit - startsWith.length;
+  const contains =
+    remaining > 0
+      ? await db
+          .select({ id: words.id, termTibetan: words.termTibetan })
+          .from(words)
+          .where(containsWhere)
+          .orderBy(words.termTibetan)
+          .limit(limit)
+      : [];
+
+  // A word whose definition mentions the query can also start with it, so the
+  // two halves are not guaranteed disjoint.
+  const seen = new Set(startsWith.map((row) => row.id));
+  const rows = [
+    ...startsWith,
+    ...contains.filter((row) => !seen.has(row.id)).slice(0, remaining),
+  ];
+
+  const previews = await buildPreviews(
+    rows.map((row) => row.id),
+    normalizeForSearch(query),
+  );
+
+  return rows.map((row) => ({ ...row, preview: previews.get(row.id) ?? null }));
 }
 
 export type LetterResults = {
